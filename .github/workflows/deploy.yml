@@ -34,11 +34,8 @@ jobs:
           elif [ -f "bomber-robot-online.html" ]; then
             cp bomber-robot-online.html _site/index.html
           elif [ -n "$HTML_FILE" ]; then
-            echo "Found $HTML_FILE, publishing as index.html"
             cp "$HTML_FILE" _site/index.html
           else
-            echo "Error: No .html game file found in repository!"
-            ls -la
             exit 1
           fi
 
@@ -53,8 +50,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Output Live Website Link
-        run: |
-          echo "### 🚀 Bomber Robot Online is Live!" >> "$GITHUB_STEP_SUMMARY"
-          echo "Play your game here: **${{ steps.deployment.outputs.page_url }}**" >> "$GITHUB_STEP_SUMMARY"
