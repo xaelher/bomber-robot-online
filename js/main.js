@@ -409,11 +409,20 @@ function setupEventListeners() {
 // =========================================================================
 // Application Boot
 // =========================================================================
-window.addEventListener('DOMContentLoaded', async () => {
+function boot() {
     initLocalMapSelector();
     applyTouchControlsVisibility();
     setupEventListeners();
-    await initFirebase();
     requestAnimationFrame(gameLoop);
-});
+    // Initialize Firebase in the background without blocking UI
+    initFirebase().catch(err => {
+        console.warn('Firebase init error:', err);
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+} else {
+    boot();
+}
 

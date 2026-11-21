@@ -48,6 +48,8 @@ export function getRobotSpawn(slotIndex, cols, rows) {
     return { c: 1, r: rows - 2 };
 }
 
+export const CARDINAL_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
 export const POWERUP_TYPES = {
     BOMB: { id: 'BOMB', label: '+1 BOMB', color: '#3b82f6', icon: '💣', isRare: false },
     FIRE: { id: 'FIRE', label: '+1 FLAME', color: '#f97316', icon: '🔥', isRare: false },

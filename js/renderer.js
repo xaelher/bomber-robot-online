@@ -104,6 +104,7 @@ export function drawMiniMapPreview(canvasEl, mapId) {
 
 export function renderMapSelector(containerId, descTextId, selectedId, onSelect, isDisabled = false) {
     const container = document.getElementById(containerId);
+    if (!container) return;
     const descEl = document.getElementById(descTextId);
     const choices = [...MAP_IDS, 'random'];
 
