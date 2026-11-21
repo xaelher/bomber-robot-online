@@ -196,6 +196,13 @@
                 </svg>
             </button>
 
+            <!-- Touch Controls Toggle -->
+            <button id="btnTouchToggle"
+                class="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 text-cyan-300 transition flex items-center justify-center text-sm font-bold"
+                title="Toggle On-Screen Touch Controls">
+                🎮
+            </button>
+
             <!-- Exit Match Button -->
             <button id="btnReturnMenu"
                 class="hidden px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/50 text-rose-300 text-xs sm:text-sm font-arcade font-bold transition">
@@ -615,7 +622,7 @@
 
             <!-- Mobile Touch Controls -->
             <div id="mobileTouchControls"
-                class="mt-3 w-full max-w-md flex sm:hidden items-center justify-between px-3 select-none">
+                class="mt-3 w-full max-w-md hidden items-center justify-between px-3 select-none touch-none">
                 <div class="grid grid-cols-3 gap-1.5 w-36 h-36">
                     <div></div>
                     <button data-dir="up"
@@ -1288,8 +1295,14 @@
             playerName: 'Pilot-' + Math.floor(100 + Math.random() * 900),
             roomUnsubscribe: null,
             roomsListUnsubscribe: null,
+            inputsUnsubscribe: null,
+            subscribedInputsRoomCode: null,
+            lobbyHeartbeatInterval: null,
             lastStatePushTime: 0,
             lastClientInputPush: 0,
+            lastSentInput: null,
+            clientInputSeq: 0,
+            lastHostStateReceived: 0,
             lastProcessedRoundSeed: null,
             remoteInputs: {}
         };
@@ -1644,6 +1657,12 @@
             game.lastCountdownSec = -1;
 
             game.robots = robotConfigs.map((cfg, idx) => createRobot(cfg.slot !== undefined ? cfg.slot : idx, cfg));
+            game.robots.forEach(r => {
+                r._roundStartTime = Date.now();
+                r._lastRemoteSwapSeq = 0;
+                r._lastRemoteDetSeq = 0;
+                r._lastRemoteActSeq = 0;
+            });
 
             document.getElementById('arenaOverlay').classList.add('hidden');
             resizeCanvas();
@@ -1666,6 +1685,93 @@
             return val || netState.playerName;
         }
 
+        function startLobbyHeartbeat() {
+            if (netState.lobbyHeartbeatInterval) return;
+            netState.lobbyHeartbeatInterval = setInterval(() => {
+                if (netState.isOnline && netState.isHost && netState.roomCode && firebaseReady && currentUser) {
+                    const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
+                    updateDoc(roomDocRef, { updatedAt: Date.now() }).catch(err => {
+                        console.warn('Lobby heartbeat error:', err);
+                    });
+                }
+            }, 10000);
+        }
+
+        function stopLobbyHeartbeat() {
+            if (netState.lobbyHeartbeatInterval) {
+                clearInterval(netState.lobbyHeartbeatInterval);
+                netState.lobbyHeartbeatInterval = null;
+            }
+        }
+
+        function subscribeHostToInputs(code) {
+            if (netState.inputsUnsubscribe && netState.subscribedInputsRoomCode === code) return;
+            if (netState.inputsUnsubscribe) {
+                netState.inputsUnsubscribe();
+                netState.inputsUnsubscribe = null;
+            }
+            netState.subscribedInputsRoomCode = code;
+            const inputsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', code, 'inputs');
+            netState.inputsUnsubscribe = onSnapshot(inputsColRef, (snapshot) => {
+                const now = Date.now();
+                snapshot.forEach(docSnap => {
+                    const slot = parseInt(docSnap.id, 10);
+                    const data = docSnap.data();
+                    if (!data) return;
+                    netState.remoteInputs[slot] = {
+                        ...data,
+                        receivedAt: now
+                    };
+                });
+            }, (err) => {
+                console.warn('Host inputs snapshot error:', err);
+            });
+        }
+
+        function eliminateRemoteDisconnected(robot, label = 'DISCONNECTED') {
+            if (!robot || !robot.alive) return;
+            robot.alive = false;
+            robot.invulnTimer = 0;
+            sfx.robotEliminated();
+            game.screenShake = Math.max(game.screenShake, 0.36);
+            spawnExplosionParticles(robot.x, robot.y, robot.color, 34);
+            addFloatingText(robot.x, robot.y - 0.5, label, '#ff4d6d');
+            updateGameHud();
+            if (!game.roundOver) {
+                const aliveRobots = game.robots.filter(r => r.alive);
+                if (aliveRobots.length <= 1) {
+                    handleRoundComplete(aliveRobots.length === 1 ? aliveRobots[0] : null);
+                }
+            }
+        }
+
+        function isTouchDevice() {
+            return window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        }
+
+        let touchControlsVisible = isTouchDevice();
+
+        function applyTouchControlsVisibility() {
+            const el = document.getElementById('mobileTouchControls');
+            const btn = document.getElementById('btnTouchToggle');
+            if (!el) return;
+            if (touchControlsVisible) {
+                el.classList.remove('hidden');
+                el.classList.add('flex');
+                if (btn) {
+                    btn.classList.add('border-cyan-400', 'bg-cyan-500/20');
+                    btn.classList.remove('opacity-60');
+                }
+            } else {
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+                if (btn) {
+                    btn.classList.remove('border-cyan-400', 'bg-cyan-500/20');
+                    btn.classList.add('opacity-60');
+                }
+            }
+        }
+
         function subscribeToOpenRooms() {
             if (!firebaseReady || !db || !currentUser) return;
             if (netState.roomsListUnsubscribe) netState.roomsListUnsubscribe();
@@ -1678,7 +1784,19 @@
 
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    if (data && data.status === 'lobby' && (now - (data.updatedAt || 0) < 900000)) {
+                    if (!data) return;
+
+                    const playerCount = Object.values(data.players || {}).filter(Boolean).length;
+                    const isStale = (now - (data.updatedAt || 0) > 60000) || playerCount === 0;
+
+                    // Automatically clean dead/abandoned rooms from database
+                    if (isStale) {
+                        deleteDoc(docSnap.ref).catch(err => console.warn('Cleaned dead room error:', docSnap.id, err));
+                        return;
+                    }
+
+                    // Strict freshness filter: 40 seconds
+                    if (data.status === 'lobby' && (now - (data.updatedAt || 0) < 40000)) {
                         openRooms.push({ id: docSnap.id, ...data });
                     }
                 });
@@ -1734,7 +1852,6 @@
                 players: {
                     '0': { slot: 0, uid: currentUser.uid, name: myName, ready: true, wins: 0 }
                 },
-                inputs: {},
                 gameState: null
             };
 
@@ -1838,13 +1955,27 @@
                 const room = snap.data();
                 netState.isHost = (room.hostUid === currentUser.uid);
 
+                if (netState.isHost) {
+                    subscribeHostToInputs(code);
+                } else if (netState.inputsUnsubscribe) {
+                    netState.inputsUnsubscribe();
+                    netState.inputsUnsubscribe = null;
+                    netState.subscribedInputsRoomCode = null;
+                }
+
                 if (room.status === 'lobby') {
+                    if (netState.isHost) {
+                        startLobbyHeartbeat();
+                    } else {
+                        stopLobbyHeartbeat();
+                    }
                     if (game.active) {
                         game.active = false;
                         showView('viewRoomLobby');
                     }
                     renderRoomLobby(room);
                 } else if (room.status === 'playing') {
+                    stopLobbyHeartbeat();
                     handleOnlineGameSync(room);
                 }
             }, (err) => {
@@ -1872,7 +2003,9 @@
             renderMapSelector('lobbyMapSelectorGrid', 'lobbyMapDescText', uiSelection.lobbyMap, async (chosenMapId) => {
                 if (!netState.isHost || !netState.roomCode || !firebaseReady || !currentUser) return;
                 const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
-                await updateDoc(roomDocRef, { mapChoice: chosenMapId, updatedAt: Date.now() }).catch(() => { });
+                await updateDoc(roomDocRef, { mapChoice: chosenMapId, updatedAt: Date.now() }).catch(err => {
+                    console.warn('Lobby map update error:', err);
+                });
             }, !netState.isHost);
 
             const startBtn = document.getElementById('btnHostStartOnline');
@@ -1983,6 +2116,14 @@
                 return;
             }
 
+            stopLobbyHeartbeat();
+            subscribeHostToInputs(netState.roomCode);
+
+            // Clean previous input docs for fresh match
+            for (let s = 0; s < 4; s++) {
+                deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode, 'inputs', String(s))).catch(() => { });
+            }
+
             game.mode = 'online';
             game.selectedMapChoice = room.mapChoice || 'foundry';
             game.winsNeeded = parseInt(room.winsNeeded || 3, 10);
@@ -1994,7 +2135,6 @@
 
             await updateDoc(roomDocRef, {
                 status: 'playing',
-                inputs: {},
                 gameState: serializeOnlineGameState(seed),
                 updatedAt: Date.now()
             });
@@ -2028,6 +2168,7 @@
                     maxBombs: r.maxBombs, activeBombs: r.activeBombs,
                     activeDetonatorBombs: r.activeDetonatorBombs,
                     blastRadius: r.blastRadius, speed: Number(r.speed.toFixed(2)),
+                    invulnTimer: Number(r.invulnTimer.toFixed(2)),
                     hasShield: r.hasShield, virusEffect: r.virusEffect,
                     rareItem: r.rareItem, rareAmmo: r.rareAmmo, equippedSlot: r.equippedSlot
                 })),
@@ -2067,11 +2208,22 @@
             }
 
             if (netState.isHost) {
-                netState.remoteInputs = room.inputs || {};
+                // Host checks if any active remote player disconnected from room.players
+                if (room.status === 'playing' && game.active) {
+                    const players = room.players || {};
+                    for (const robot of game.robots) {
+                        if (robot.alive && robot.controlType === 'online_remote') {
+                            if (!players[robot.slot]) {
+                                eliminateRemoteDisconnected(robot, 'DISCONNECTED');
+                            }
+                        }
+                    }
+                }
                 return;
             }
 
             // Client applies authoritative Host state
+            netState.lastHostStateReceived = Date.now();
             const dimChanged = (gs.cols && gs.cols !== game.cols) || (gs.rows && gs.rows !== game.rows);
             game.mode = 'online';
             game.activeMapId = gs.activeMapId || 'foundry';
@@ -2140,6 +2292,7 @@
                 localR.activeDetonatorBombs = sr.activeDetonatorBombs || 0;
                 localR.blastRadius = sr.blastRadius;
                 localR.speed = sr.speed;
+                localR.invulnTimer = sr.invulnTimer !== undefined ? sr.invulnTimer : 0;
                 localR.hasShield = sr.hasShield;
                 localR.virusEffect = sr.virusEffect;
                 localR.rareItem = sr.rareItem || null;
@@ -2180,6 +2333,14 @@
         }
 
         async function leaveOnlineRoom(notifyServer = true) {
+            stopLobbyHeartbeat();
+            if (netState.inputsUnsubscribe) {
+                netState.inputsUnsubscribe();
+                netState.inputsUnsubscribe = null;
+            }
+            netState.subscribedInputsRoomCode = null;
+            netState.remoteInputs = {};
+
             if (netState.roomUnsubscribe) {
                 netState.roomUnsubscribe();
                 netState.roomUnsubscribe = null;
@@ -2188,14 +2349,20 @@
                 const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
                 try {
                     if (netState.isHost) {
+                        for (let s = 0; s < 4; s++) {
+                            deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode, 'inputs', String(s))).catch(() => { });
+                        }
                         await deleteDoc(roomDocRef);
                     } else {
                         await updateDoc(roomDocRef, {
                             [`players.${netState.mySlot}`]: null,
                             updatedAt: Date.now()
                         });
+                        deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode, 'inputs', String(netState.mySlot))).catch(() => { });
                     }
-                } catch (e) { }
+                } catch (e) {
+                    console.warn('leaveOnlineRoom error:', e);
+                }
             }
             netState.isOnline = false;
             netState.roomCode = null;
@@ -2231,24 +2398,29 @@
             return true;
         }
 
-        function moveRobot(robot, dx, dy, dt) {
+        function updateRobotTimers(robot, dt) {
             if (!robot.alive) return;
-
             if (robot.warpCooldown > 0) robot.warpCooldown = Math.max(0, robot.warpCooldown - dt);
             if (robot.invulnTimer > 0) robot.invulnTimer = Math.max(0, robot.invulnTimer - dt);
             if (robot.actionCooldown > 0) robot.actionCooldown = Math.max(0, robot.actionCooldown - dt);
             if (robot.virusTimer > 0) {
-                robot.virusTimer -= dt;
-                if (robot.virusEffect === 'reverse') {
-                    dx = -dx;
-                    dy = -dy;
-                } else if (robot.virusEffect === 'diarrhea') {
+                robot.virusTimer = Math.max(0, robot.virusTimer - dt);
+                if (robot.virusEffect === 'diarrhea') {
                     placeBomb(robot);
                 }
                 if (robot.virusTimer <= 0) {
                     robot.virusEffect = null;
                     updateGameHud();
                 }
+            }
+        }
+
+        function moveRobot(robot, dx, dy, dt) {
+            if (!robot.alive) return;
+
+            if (robot.virusTimer > 0 && robot.virusEffect === 'reverse') {
+                dx = -dx;
+                dy = -dy;
             }
 
             robot.moving = (dx !== 0 || dy !== 0);
@@ -3587,24 +3759,82 @@
 
             // Online Guest Client pushes inputs only
             if (game.mode === 'online' && !netState.isHost) {
+                // If host hasn't updated gameState for > 10 seconds, notify and return to menu
+                if (netState.lastHostStateReceived && (Date.now() - netState.lastHostStateReceived > 10000)) {
+                    showToast('Хост отключился. Возврат в главное меню.', true);
+                    leaveOnlineRoom(false);
+                    return;
+                }
+
                 const now = performance.now();
-                if (firebaseReady && currentUser && netState.roomCode &&
-                    (inputs.p1Swap || inputs.p1Det || inputs.p1ActionFresh || (now - netState.lastClientInputPush > 62))) {
+                const cur = {
+                    dx: inputs.p1x,
+                    dy: inputs.p1y,
+                    bomb: inputs.p1Action,
+                    actionFresh: inputs.p1ActionFresh,
+                    swap: inputs.p1Swap,
+                    detonate: inputs.p1Det
+                };
+
+                const last = netState.lastSentInput;
+                const stateChanged = !last ||
+                    last.dx !== cur.dx ||
+                    last.dy !== cur.dy ||
+                    last.bomb !== cur.bomb ||
+                    cur.actionFresh ||
+                    cur.swap ||
+                    cur.detonate;
+
+                const isHeartbeat = (now - (netState.lastClientInputPush || 0) > 350);
+
+                if (firebaseReady && currentUser && netState.roomCode && (stateChanged || isHeartbeat)) {
                     netState.lastClientInputPush = now;
-                    const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
-                    updateDoc(roomDocRef, {
-                        [`inputs.${netState.mySlot}`]: {
-                            dx: inputs.p1x, dy: inputs.p1y,
-                            bomb: inputs.p1Action,
-                            actionFresh: inputs.p1ActionFresh,
-                            swap: inputs.p1Swap,
-                            detonate: inputs.p1Det,
-                            ts: Date.now()
-                        }
-                    }).catch(() => { });
+                    netState.lastSentInput = cur;
+                    netState.clientInputSeq = (netState.clientInputSeq || 0) + 1;
+                    const nextSeq = netState.clientInputSeq;
+
+                    const inputDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode, 'inputs', String(netState.mySlot));
+                    setDoc(inputDocRef, {
+                        slot: netState.mySlot,
+                        dx: cur.dx,
+                        dy: cur.dy,
+                        bomb: cur.bomb,
+                        actionFresh: cur.actionFresh,
+                        swap: cur.swap,
+                        detonate: cur.detonate,
+                        seq: nextSeq,
+                        ts: Date.now()
+                    }).catch((err) => {
+                        console.warn('Client input send error:', err);
+                    });
                 }
                 game.prevKeys = { ...game.keys };
                 return;
+            }
+
+            // Check for disconnected online guests (>12s with no heartbeat)
+            if (game.mode === 'online' && netState.isHost) {
+                const now = Date.now();
+                for (const robot of game.robots) {
+                    if (!robot.alive || robot.controlType !== 'online_remote') continue;
+                    const rInp = netState.remoteInputs[robot.slot];
+                    const lastRecv = rInp?.receivedAt || robot._roundStartTime || now;
+                    if (now - lastRecv > 12000) {
+                        eliminateRemoteDisconnected(robot, 'DISCONNECTED');
+                        if (netState.roomCode) {
+                            const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
+                            updateDoc(roomDocRef, {
+                                [`players.${robot.slot}`]: null,
+                                updatedAt: Date.now()
+                            }).catch(err => console.warn('Disconnection slot clear error:', err));
+                        }
+                    }
+                }
+            }
+
+            // Update timers for all living robots regardless of movement or remote input
+            for (const robot of game.robots) {
+                if (robot.alive) updateRobotTimers(robot, dt);
             }
 
             // Authoritative Simulation (Local Mode or Online Host)
@@ -3625,19 +3855,22 @@
                     if (inputs.p2Action) useEquippedItem(robot, inputs.p2ActionFresh);
                 } else if (robot.controlType === 'online_remote') {
                     const rInp = netState.remoteInputs[robot.slot];
-                    if (rInp && (Date.now() - (rInp.ts || 0) < 1500)) {
+                    // Host checks timeout relative to host's OWN receivedAt time (no device clock skew!)
+                    const isFresh = rInp && (Date.now() - (rInp.receivedAt || 0) < 1500);
+                    if (isFresh) {
                         moveRobot(robot, rInp.dx || 0, rInp.dy || 0, dt);
-                        if (rInp.swap && rInp.ts !== robot._lastRemoteSwapTs) {
-                            robot._lastRemoteSwapTs = rInp.ts;
+                        const seqVal = rInp.seq !== undefined ? rInp.seq : (rInp.ts || 0);
+                        if (rInp.swap && seqVal !== robot._lastRemoteSwapSeq) {
+                            robot._lastRemoteSwapSeq = seqVal;
                             swapRobotWeapon(robot);
                         }
-                        if (rInp.detonate && rInp.ts !== robot._lastRemoteDetTs) {
-                            robot._lastRemoteDetTs = rInp.ts;
+                        if (rInp.detonate && seqVal !== robot._lastRemoteDetSeq) {
+                            robot._lastRemoteDetSeq = seqVal;
                             triggerRobotDetonator(robot);
                         }
                         if (rInp.bomb) {
-                            const isFresh = !!rInp.actionFresh && rInp.ts !== robot._lastRemoteActTs;
-                            if (isFresh) robot._lastRemoteActTs = rInp.ts;
+                            const isFresh = !!rInp.actionFresh && seqVal !== robot._lastRemoteActSeq;
+                            if (isFresh) robot._lastRemoteActSeq = seqVal;
                             useEquippedItem(robot, isFresh);
                         }
                     } else {
@@ -3696,7 +3929,9 @@
                     updateDoc(roomDocRef, {
                         gameState: serializeOnlineGameState(),
                         updatedAt: Date.now()
-                    }).catch(() => { });
+                    }).catch(err => {
+                        console.warn('Host state push error:', err);
+                    });
                 }
             }
 
@@ -4780,46 +5015,68 @@
         document.querySelectorAll('.touch-dir').forEach(btn => {
             const dir = btn.dataset.dir;
             const setDir = (active) => {
-                if (!active) { game.touchDir = { x: 0, y: 0 }; return; }
+                if (!active) {
+                    if ((dir === 'up' && game.touchDir.y < 0) ||
+                        (dir === 'down' && game.touchDir.y > 0) ||
+                        (dir === 'left' && game.touchDir.x < 0) ||
+                        (dir === 'right' && game.touchDir.x > 0)) {
+                        game.touchDir = { x: 0, y: 0 };
+                    }
+                    return;
+                }
                 if (dir === 'up') game.touchDir = { x: 0, y: -1 };
                 if (dir === 'down') game.touchDir = { x: 0, y: 1 };
                 if (dir === 'left') game.touchDir = { x: -1, y: 0 };
                 if (dir === 'right') game.touchDir = { x: 1, y: 0 };
             };
-            btn.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(true); });
-            btn.addEventListener('touchend', (e) => { e.preventDefault(); setDir(false); });
-            btn.addEventListener('mousedown', () => setDir(true));
-            btn.addEventListener('mouseup', () => setDir(false));
+            btn.addEventListener('pointerdown', (e) => { e.preventDefault(); setDir(true); });
+            btn.addEventListener('pointerup', (e) => { e.preventDefault(); setDir(false); });
+            btn.addEventListener('pointercancel', (e) => { e.preventDefault(); setDir(false); });
+            btn.addEventListener('pointerleave', (e) => { e.preventDefault(); setDir(false); });
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(true); }, { passive: false });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); setDir(false); }, { passive: false });
+            btn.addEventListener('touchcancel', (e) => { e.preventDefault(); setDir(false); }, { passive: false });
+            btn.addEventListener('mousedown', (e) => { e.preventDefault(); setDir(true); });
+            btn.addEventListener('mouseup', (e) => { e.preventDefault(); setDir(false); });
+            btn.addEventListener('mouseleave', (e) => { e.preventDefault(); setDir(false); });
         });
 
-        const btnTouchBomb = document.getElementById('btnTouchBomb');
-        btnTouchBomb.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            game.touchQueue.action = true;
+        window.addEventListener('blur', () => {
+            game.touchDir = { x: 0, y: 0 };
+            game.keys = {};
         });
-        btnTouchBomb.addEventListener('click', () => {
-            game.touchQueue.action = true;
+        window.addEventListener('touchcancel', () => {
+            game.touchDir = { x: 0, y: 0 };
         });
-
-        const btnTouchSwap = document.getElementById('btnTouchSwap');
-        btnTouchSwap.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            game.touchQueue.swap = true;
-        });
-        btnTouchSwap.addEventListener('click', () => {
-            game.touchQueue.swap = true;
+        window.addEventListener('pointercancel', () => {
+            game.touchDir = { x: 0, y: 0 };
         });
 
-        const btnTouchDetonate = document.getElementById('btnTouchDetonate');
-        btnTouchDetonate.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            game.touchQueue.detonate = true;
-        });
-        btnTouchDetonate.addEventListener('click', () => {
-            game.touchQueue.detonate = true;
-        });
+        const wireTouchAction = (id, key) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const trigger = (e) => {
+                if (e && e.cancelable) e.preventDefault();
+                game.touchQueue[key] = true;
+            };
+            btn.addEventListener('pointerdown', trigger);
+            btn.addEventListener('touchstart', trigger, { passive: false });
+            btn.addEventListener('click', trigger);
+        };
+        wireTouchAction('btnTouchBomb', 'action');
+        wireTouchAction('btnTouchSwap', 'swap');
+        wireTouchAction('btnTouchDetonate', 'detonate');
 
         // UI Button Wiring
+        const btnTouchToggle = document.getElementById('btnTouchToggle');
+        if (btnTouchToggle) {
+            btnTouchToggle.addEventListener('click', () => {
+                touchControlsVisible = !touchControlsVisible;
+                applyTouchControlsVisibility();
+                showToast(touchControlsVisible ? 'Touch controls enabled' : 'Touch controls hidden');
+            });
+        }
+
         document.getElementById('btnSoundToggle').addEventListener('click', () => {
             const muted = sfx.toggleMute();
             document.getElementById('iconSoundOn').classList.toggle('hidden', muted);
@@ -4870,7 +5127,9 @@
                     botFill: document.getElementById('lobbyBotFillSelect').value,
                     botDiff: document.getElementById('lobbyBotDiffSelect').value,
                     updatedAt: Date.now()
-                }).catch(() => { });
+                }).catch(err => {
+                    console.warn('Lobby settings update error:', err);
+                });
             });
         });
 
@@ -4880,7 +5139,9 @@
             const snap = await getDoc(roomDocRef);
             if (!snap.exists()) return;
             const currentReady = snap.data().players?.[netState.mySlot]?.ready || false;
-            await updateDoc(roomDocRef, { [`players.${netState.mySlot}.ready`]: !currentReady }).catch(() => { });
+            await updateDoc(roomDocRef, { [`players.${netState.mySlot}.ready`]: !currentReady }).catch(err => {
+                console.warn('Toggle ready update error:', err);
+            });
         });
 
         document.getElementById('btnHostStartOnline').addEventListener('click', hostLaunchOnlineMatch);
@@ -4900,6 +5161,26 @@
             if (game.active) resizeCanvas();
         });
 
+        // Tab close / navigation cleanup (Problem 2)
+        function handleTabClose() {
+            if (!netState.isOnline || !netState.roomCode || !firebaseReady || !currentUser) return;
+            const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
+            if (netState.isHost) {
+                for (let s = 0; s < 4; s++) {
+                    deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode, 'inputs', String(s))).catch(() => { });
+                }
+                deleteDoc(roomDocRef).catch(() => { });
+            } else {
+                updateDoc(roomDocRef, {
+                    [`players.${netState.mySlot}`]: null,
+                    updatedAt: Date.now()
+                }).catch(() => { });
+                deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode, 'inputs', String(netState.mySlot))).catch(() => { });
+            }
+        }
+        window.addEventListener('beforeunload', handleTabClose);
+        window.addEventListener('pagehide', handleTabClose);
+
         // Render initial Local Map Selector
         function initLocalMapSelector() {
             renderMapSelector('localMapSelectorGrid', 'localMapDescText', uiSelection.localMap, (chosenId) => {
@@ -4911,6 +5192,7 @@
         // Boot Application on Window Load
         window.onload = async function () {
             initLocalMapSelector();
+            applyTouchControlsVisibility();
             await initFirebase();
             requestAnimationFrame(gameLoop);
         };
