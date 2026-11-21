@@ -1362,6 +1362,8 @@
             cols: DEFAULT_COLS,
             rows: DEFAULT_ROWS,
             isBig: false,
+            gridDirty: true,
+            lastDt: 0.016,
             winsNeeded: 3,
             roundNumber: 1,
             roundTimer: ROUND_DURATION_STANDARD,
@@ -1655,6 +1657,10 @@
             game.roundOver = false;
             game.active = true;
             game.lastCountdownSec = -1;
+            game.gridDirty = true;
+            netState.remoteInputs = {};
+            netState.lastSentInput = null;
+            netState.lastClientInputPush = 0;
 
             game.robots = robotConfigs.map((cfg, idx) => createRobot(cfg.slot !== undefined ? cfg.slot : idx, cfg));
             game.robots.forEach(r => {
@@ -1724,11 +1730,11 @@
                     };
                 });
             }, (err) => {
-                console.warn('Host inputs snapshot error:', err);
+                console.error('Host inputs snapshot error:', err);
             });
         }
 
-        function eliminateRemoteDisconnected(robot, label = 'DISCONNECTED') {
+        function eliminateRemoteDisconnected(robot, label = 'LEFT MATCH') {
             if (!robot || !robot.alive) return;
             robot.alive = false;
             robot.invulnTimer = 0;
@@ -2135,7 +2141,7 @@
 
             await updateDoc(roomDocRef, {
                 status: 'playing',
-                gameState: serializeOnlineGameState(seed),
+                gameState: serializeOnlineGameState(seed, true),
                 updatedAt: Date.now()
             });
 
@@ -2143,7 +2149,9 @@
             resizeCanvas();
         }
 
-        function serializeOnlineGameState(seed = netState.lastProcessedRoundSeed) {
+        function serializeOnlineGameState(seed = netState.lastProcessedRoundSeed, forceGrid = false) {
+            const sendGrid = forceGrid || game.gridDirty;
+            if (game.gridDirty) game.gridDirty = false;
             return {
                 seed,
                 roundNumber: game.roundNumber,
@@ -2156,7 +2164,7 @@
                 rows: game.rows,
                 isBig: game.isBig,
                 winsNeeded: game.winsNeeded,
-                gridFlat: game.grid.flat(),
+                ...(sendGrid ? { gridFlat: game.grid.flat() } : {}),
                 warpPads: game.warpPads,
                 crusherWarnings: game.crusherWarnings.map(w => ({ c: w.c, r: w.r, timer: Number(w.timer.toFixed(2)) })),
                 robots: game.robots.map(r => ({
@@ -2175,7 +2183,8 @@
                 bombs: game.bombs.map(b => ({
                     id: b.id, c: b.c, r: b.r, ownerSlot: b.ownerSlot,
                     radius: b.radius, timer: b.isDetonator ? 999 : Number(b.timer.toFixed(2)),
-                    isDetonator: !!b.isDetonator
+                    isDetonator: !!b.isDetonator,
+                    passSlots: Array.from(b.passSlots || [])
                 })),
                 explosions: game.explosions.map(e => ({
                     c: e.c, r: e.r, timer: Number(e.timer.toFixed(2)), dir: e.dir || 'center'
@@ -2214,7 +2223,7 @@
                     for (const robot of game.robots) {
                         if (robot.alive && robot.controlType === 'online_remote') {
                             if (!players[robot.slot]) {
-                                eliminateRemoteDisconnected(robot, 'DISCONNECTED');
+                                eliminateRemoteDisconnected(robot, 'LEFT MATCH');
                             }
                         }
                     }
@@ -2246,6 +2255,7 @@
             game.crusherWarnings = (gs.crusherWarnings || []).map(w => ({ ...w, maxTimer: 0.85 }));
             game.active = true;
 
+            // Only update grid when gridFlat is sent (map changed or new round)
             if (gs.gridFlat && gs.gridFlat.length === game.rows * game.cols) {
                 const newGrid = [];
                 for (let r = 0; r < game.rows; r++) {
@@ -2254,7 +2264,7 @@
                 game.grid = newGrid;
             }
 
-            // Sync robots smoothly
+            // Sync robots smoothly with Client-Side Prediction Reconciliation & dt-based interpolation
             gs.robots.forEach(sr => {
                 let localR = game.robots.find(r => r.slot === sr.slot);
                 if (!localR) {
@@ -2265,20 +2275,48 @@
                     });
                     game.robots.push(localR);
                 }
-                const jumpDist = Math.hypot(sr.x - localR.x, sr.y - localR.y);
-                if (jumpDist > 2.2) {
-                    if (jumpDist > 3.5 && localR.alive && sr.alive) {
-                        sfx.warp();
-                        spawnWarpBurst(sr.x, sr.y, '#00f3ff');
+
+                if (sr.slot === netState.mySlot) {
+                    // Soft reconciliation for own predicted robot
+                    const diff = Math.hypot(sr.x - localR.x, sr.y - localR.y);
+                    if (diff > 1.5) {
+                        // Large discrepancy (Warp Pad or hard collision) -> hard sync
+                        if (diff > 3.5 && localR.alive && sr.alive) {
+                            sfx.warp();
+                            spawnWarpBurst(sr.x, sr.y, '#00f3ff');
+                        }
+                        localR.x = sr.x;
+                        localR.y = sr.y;
+                    } else if (diff < 0.85) {
+                        // Smooth catch-up (lerp 0.18)
+                        localR.x += (sr.x - localR.x) * 0.18;
+                        localR.y += (sr.y - localR.y) * 0.18;
+                    } else {
+                        // Intermediate catch-up
+                        localR.x += (sr.x - localR.x) * 0.35;
+                        localR.y += (sr.y - localR.y) * 0.35;
                     }
-                    localR.x = sr.x;
-                    localR.y = sr.y;
                 } else {
-                    localR.x += (sr.x - localR.x) * 0.6;
-                    localR.y += (sr.y - localR.y) * 0.6;
+                    // Remote robots: store target and interpolate smoothly
+                    localR.targetX = sr.x;
+                    localR.targetY = sr.y;
+                    const jumpDist = Math.hypot(sr.x - localR.x, sr.y - localR.y);
+                    if (jumpDist > 2.2) {
+                        if (jumpDist > 3.5 && localR.alive && sr.alive) {
+                            sfx.warp();
+                            spawnWarpBurst(sr.x, sr.y, '#00f3ff');
+                        }
+                        localR.x = sr.x;
+                        localR.y = sr.y;
+                    } else {
+                        const smoothFactor = 1 - Math.exp(-18 * (game.lastDt || 0.016));
+                        localR.x += (sr.x - localR.x) * smoothFactor;
+                        localR.y += (sr.y - localR.y) * smoothFactor;
+                    }
+                    localR.dir = sr.dir;
+                    localR.moving = sr.moving;
                 }
-                localR.dir = sr.dir;
-                localR.moving = sr.moving;
+
                 if (localR.alive && !sr.alive) {
                     sfx.robotEliminated();
                     spawnExplosionParticles(localR.x, localR.y, localR.color, 26);
@@ -2298,7 +2336,7 @@
                 localR.rareItem = sr.rareItem || null;
                 localR.rareAmmo = sr.rareAmmo || 0;
                 localR.equippedSlot = sr.equippedSlot || 'bomb';
-                if (localR.moving) localR.walkAnim += 0.25;
+                if (localR.moving && sr.slot !== netState.mySlot) localR.walkAnim += 0.25;
             });
 
             if (gs.bombs.length > game.bombs.length) sfx.bombDrop();
@@ -2309,7 +2347,11 @@
             if ((gs.projectiles || []).length > game.projectiles.length) sfx.sniperShot();
             if ((gs.knifeSlashes || []).length > game.knifeSlashes.length) sfx.knifeSlash();
 
-            game.bombs = gs.bombs.map(b => ({ ...b, maxTimer: 2.35 }));
+            game.bombs = gs.bombs.map(b => ({
+                ...b,
+                maxTimer: 2.35,
+                passSlots: new Set(b.passSlots || [])
+            }));
             game.explosions = gs.explosions.map(e => ({ ...e, maxTimer: 0.48 }));
             game.powerups = gs.powerups.map(p => ({ ...p, bobTimer: performance.now() / 280 }));
             game.projectiles = (gs.projectiles || []).map(pr => ({ ...pr }));
@@ -2891,6 +2933,7 @@
 
                     if (tile === TILE_CRATE) {
                         game.grid[tr][tc] = TILE_EMPTY;
+                        game.gridDirty = true;
                         if (owner) owner.score += 15;
                         spawnCrateDebris(tc + 0.5, tr + 0.5);
                         maybeSpawnPowerup(tc, tr);
@@ -2899,6 +2942,7 @@
 
                     if (tile === TILE_RARE_CRATE) {
                         game.grid[tr][tc] = TILE_EMPTY;
+                        game.gridDirty = true;
                         if (owner) owner.score += 100;
                         spawnExplosionParticles(tc + 0.5, tr + 0.5, '#facc15', 28);
                         const rareType = game.rareDropQueue.shift() || RARE_DROP_POOL[Math.floor(Math.random() * RARE_DROP_POOL.length)];
@@ -3558,6 +3602,7 @@
 
             for (const pos of chosen) {
                 game.grid[pos.r][pos.c] = TILE_RARE_CRATE;
+                game.gridDirty = true;
                 const pIdx = game.powerups.findIndex(p => p.c === pos.c && p.r === pos.r);
                 if (pIdx !== -1) game.powerups.splice(pIdx, 1);
                 spawnExplosionParticles(pos.c + 0.5, pos.r + 0.5, '#facc15', 24);
@@ -3674,6 +3719,7 @@
                 if (cw.timer <= 0) {
                     game.crusherWarnings.splice(i, 1);
                     game.grid[cw.r][cw.c] = TILE_CRUSHER;
+                    game.gridDirty = true;
                     sfx.crusherSlam();
                     game.screenShake = Math.max(game.screenShake, 0.16);
                     spawnExplosionParticles(cw.c + 0.5, cw.r + 0.5, '#ef4444', 10);
@@ -3757,7 +3803,7 @@
 
             const inputs = getLocalInputs();
 
-            // Online Guest Client pushes inputs only
+            // Online Guest Client: Send inputs & run Client-Side Prediction (Problem 3)
             if (game.mode === 'online' && !netState.isHost) {
                 // If host hasn't updated gameState for > 10 seconds, notify and return to menu
                 if (netState.lastHostStateReceived && (Date.now() - netState.lastHostStateReceived > 10000)) {
@@ -3785,9 +3831,11 @@
                     cur.swap ||
                     cur.detonate;
 
-                const isHeartbeat = (now - (netState.lastClientInputPush || 0) > 350);
+                const timeSincePush = now - (netState.lastClientInputPush || 0);
+                // Throttled to 35-45 ms on change, or heartbeat every 250 ms
+                const shouldPush = (stateChanged && timeSincePush >= 40) || (timeSincePush >= 250);
 
-                if (firebaseReady && currentUser && netState.roomCode && (stateChanged || isHeartbeat)) {
+                if (firebaseReady && currentUser && netState.roomCode && shouldPush) {
                     netState.lastClientInputPush = now;
                     netState.lastSentInput = cur;
                     netState.clientInputSeq = (netState.clientInputSeq || 0) + 1;
@@ -3805,9 +3853,28 @@
                         seq: nextSeq,
                         ts: Date.now()
                     }).catch((err) => {
-                        console.warn('Client input send error:', err);
+                        console.error('Client input send error:', err);
                     });
                 }
+
+                // Client-Side Prediction: locally move own robot immediately for instant 60 FPS response!
+                const myRobot = game.robots.find(r => r.slot === netState.mySlot);
+                if (myRobot && myRobot.alive) {
+                    updateRobotTimers(myRobot, dt);
+                    moveRobot(myRobot, inputs.p1x, inputs.p1y, dt);
+                }
+
+                // Buffer interpolation for other remote robots & host on client screen
+                for (const robot of game.robots) {
+                    if (!robot.alive || robot.slot === netState.mySlot) continue;
+                    if (robot.targetX !== undefined && robot.targetY !== undefined) {
+                        const smoothFactor = 1 - Math.exp(-18 * dt);
+                        robot.x += (robot.targetX - robot.x) * smoothFactor;
+                        robot.y += (robot.targetY - robot.y) * smoothFactor;
+                        if (robot.moving) robot.walkAnim += 0.25;
+                    }
+                }
+
                 game.prevKeys = { ...game.keys };
                 return;
             }
@@ -3818,23 +3885,18 @@
                 for (const robot of game.robots) {
                     if (!robot.alive || robot.controlType !== 'online_remote') continue;
                     const rInp = netState.remoteInputs[robot.slot];
-                    const lastRecv = rInp?.receivedAt || robot._roundStartTime || now;
+                    const lastRecv = (rInp && rInp.receivedAt >= (robot._roundStartTime || 0)) ? rInp.receivedAt : (robot._roundStartTime || now);
                     if (now - lastRecv > 12000) {
-                        eliminateRemoteDisconnected(robot, 'DISCONNECTED');
+                        eliminateRemoteDisconnected(robot, 'LEFT MATCH');
                         if (netState.roomCode) {
                             const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
                             updateDoc(roomDocRef, {
                                 [`players.${robot.slot}`]: null,
                                 updatedAt: Date.now()
-                            }).catch(err => console.warn('Disconnection slot clear error:', err));
+                            }).catch(err => console.error('Disconnection slot clear error:', err));
                         }
                     }
                 }
-            }
-
-            // Update timers for all living robots regardless of movement or remote input
-            for (const robot of game.robots) {
-                if (robot.alive) updateRobotTimers(robot, dt);
             }
 
             // Authoritative Simulation (Local Mode or Online Host)
@@ -3842,6 +3904,9 @@
 
             for (const robot of game.robots) {
                 if (!robot.alive) continue;
+
+                // Update timers at top of loop for all alive robots even if stationary (Problem 2)
+                updateRobotTimers(robot, dt);
 
                 if (robot.controlType === 'p1' || robot.controlType === 'online_local') {
                     moveRobot(robot, inputs.p1x, inputs.p1y, dt);
@@ -3855,8 +3920,8 @@
                     if (inputs.p2Action) useEquippedItem(robot, inputs.p2ActionFresh);
                 } else if (robot.controlType === 'online_remote') {
                     const rInp = netState.remoteInputs[robot.slot];
-                    // Host checks timeout relative to host's OWN receivedAt time (no device clock skew!)
-                    const isFresh = rInp && (Date.now() - (rInp.receivedAt || 0) < 1500);
+                    // Host checks timeout relative to host's OWN receivedAt time (< 3000 ms)
+                    const isFresh = rInp && (Date.now() - (rInp.receivedAt || 0) < 3000);
                     if (isFresh) {
                         moveRobot(robot, rInp.dx || 0, rInp.dy || 0, dt);
                         const seqVal = rInp.seq !== undefined ? rInp.seq : (rInp.ts || 0);
@@ -3920,17 +3985,17 @@
                 }
             }
 
-            // Push authoritative state from Host to Firestore
+            // Push authoritative state from Host to Firestore every 50-55 ms (~18-20 ticks/sec)
             if (game.mode === 'online' && netState.isHost && firebaseReady && currentUser && netState.roomCode) {
                 const now = performance.now();
-                if (now - netState.lastStatePushTime > 70) {
+                if (now - netState.lastStatePushTime >= 50) {
                     netState.lastStatePushTime = now;
                     const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
                     updateDoc(roomDocRef, {
                         gameState: serializeOnlineGameState(),
                         updatedAt: Date.now()
                     }).catch(err => {
-                        console.warn('Host state push error:', err);
+                        console.error('Host state push error:', err);
                     });
                 }
             }
@@ -4991,6 +5056,7 @@
             if (!game.lastFrameTime) game.lastFrameTime = timestamp;
             const dt = Math.min(0.05, (timestamp - game.lastFrameTime) / 1000);
             game.lastFrameTime = timestamp;
+            game.lastDt = dt;
 
             if (game.active) {
                 updateSimulation(dt);
