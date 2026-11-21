@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bomber Robot Online - Tactical Cyber Arena</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --neon-cyan: #00f3ff;
@@ -14,11 +17,13 @@
             --neon-emerald: #10b981;
             --bg-dark: #070b14;
         }
+
         * {
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
         }
+
         body {
             margin: 0;
             padding: 0;
@@ -31,15 +36,18 @@
                 radial-gradient(circle at 88% 82%, rgba(255, 0, 127, 0.09) 0%, transparent 42%),
                 linear-gradient(180deg, rgba(11, 17, 32, 0.94) 0%, rgba(7, 11, 20, 0.98) 100%);
         }
+
         .font-arcade {
             font-family: 'Orbitron', sans-serif;
         }
+
         .arcade-panel {
             background: rgba(13, 20, 36, 0.88);
             backdrop-filter: blur(14px);
             border: 1px solid rgba(56, 189, 248, 0.25);
             box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
         }
+
         .btn-arcade {
             font-family: 'Orbitron', sans-serif;
             text-transform: uppercase;
@@ -48,35 +56,50 @@
             position: relative;
             overflow: hidden;
         }
+
         .btn-arcade:hover:not(:disabled) {
             transform: translateY(-2px);
             filter: brightness(1.14);
         }
+
         .btn-arcade:active:not(:disabled) {
             transform: translateY(1px);
         }
+
         .btn-arcade:disabled {
             opacity: 0.45;
             cursor: not-allowed;
         }
-        .glow-cyan { box-shadow: 0 0 18px rgba(0, 243, 255, 0.35); }
-        .glow-pink { box-shadow: 0 0 18px rgba(255, 0, 127, 0.35); }
-        .glow-amber { box-shadow: 0 0 18px rgba(251, 191, 36, 0.35); }
+
+        .glow-cyan {
+            box-shadow: 0 0 18px rgba(0, 243, 255, 0.35);
+        }
+
+        .glow-pink {
+            box-shadow: 0 0 18px rgba(255, 0, 127, 0.35);
+        }
+
+        .glow-amber {
+            box-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
+        }
 
         .map-card {
             transition: all 0.16s ease;
             border: 2px solid rgba(51, 65, 85, 0.7);
             background: rgba(15, 23, 42, 0.85);
         }
+
         .map-card:hover:not(.disabled-card) {
             border-color: rgba(56, 189, 248, 0.65);
             transform: translateY(-2px);
         }
+
         .map-card.selected {
             border-color: #00f3ff;
             background: rgba(8, 47, 73, 0.55);
             box-shadow: 0 0 16px rgba(0, 243, 255, 0.28);
         }
+
         .map-card.disabled-card {
             opacity: 0.65;
             pointer-events: none;
@@ -89,58 +112,93 @@
             border: 2px solid rgba(56, 189, 248, 0.28);
             touch-action: none;
         }
+
         .sudden-death-pulse {
             animation: sdPulse 0.8s ease-in-out infinite alternate;
         }
+
         @keyframes sdPulse {
-            from { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); border-color: rgba(239, 68, 68, 0.6); }
-            to { box-shadow: 0 0 24px rgba(239, 68, 68, 0.85); border-color: rgba(248, 113, 113, 1); }
+            from {
+                box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+                border-color: rgba(239, 68, 68, 0.6);
+            }
+
+            to {
+                box-shadow: 0 0 24px rgba(239, 68, 68, 0.85);
+                border-color: rgba(248, 113, 113, 1);
+            }
         }
+
         .rare-badge-glow {
             box-shadow: 0 0 12px rgba(250, 204, 21, 0.45);
         }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
-        ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.4); border-radius: 3px; }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.4);
+            border-radius: 3px;
+        }
     </style>
 </head>
+
 <body class="min-h-screen flex flex-col justify-between">
 
     <!-- Top Navigation Bar -->
-    <header class="w-full px-4 py-2.5 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md flex items-center justify-between z-30">
+    <header
+        class="w-full px-4 py-2.5 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md flex items-center justify-between z-30">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 border border-cyan-300/40">
+            <div
+                class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 border border-cyan-300/40">
                 <svg class="w-6 h-6 text-slate-950" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5Z"/>
+                    <path
+                        d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5Z" />
                 </svg>
             </div>
             <div>
-                <h1 class="font-arcade text-base sm:text-xl font-black tracking-wider bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">
+                <h1
+                    class="font-arcade text-base sm:text-xl font-black tracking-wider bg-gradient-to-r from-cyan-300 via-white to-amber-300 bg-clip-text text-transparent">
                     BOMBER ROBOT ONLINE
                 </h1>
-                <p class="text-[11px] text-cyan-400/80 font-bold tracking-widest uppercase">Tactical Cyber Arena • 8 Maps (3 Big) • Sudden Death Rare Drops</p>
+                <p class="text-[11px] text-cyan-400/80 font-bold tracking-widest uppercase">Tactical Cyber Arena • 8
+                    Maps (3 Big) • Sudden Death Rare Drops</p>
             </div>
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
             <!-- Connection Status Badge -->
-            <div id="netStatusBadge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-semibold">
+            <div id="netStatusBadge"
+                class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-xs font-semibold">
                 <span id="netStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                 <span id="netStatusText" class="text-slate-300">Connecting...</span>
             </div>
 
             <!-- Sound Toggle -->
-            <button id="btnSoundToggle" class="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 text-cyan-300 transition" title="Toggle Sound Effects">
-                <svg id="iconSoundOn" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+            <button id="btnSoundToggle"
+                class="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 text-cyan-300 transition"
+                title="Toggle Sound Effects">
+                <svg id="iconSoundOn" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 </svg>
-                <svg id="iconSoundOff" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+                <svg id="iconSoundOff" class="w-5 h-5 hidden text-rose-400" fill="none" stroke="currentColor"
+                    stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                 </svg>
             </button>
 
             <!-- Exit Match Button -->
-            <button id="btnReturnMenu" class="hidden px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/50 text-rose-300 text-xs sm:text-sm font-arcade font-bold transition">
+            <button id="btnReturnMenu"
+                class="hidden px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/50 text-rose-300 text-xs sm:text-sm font-arcade font-bold transition">
                 EXIT
             </button>
         </div>
@@ -150,8 +208,10 @@
     <main class="flex-1 flex flex-col items-center justify-center p-3 sm:p-5 w-full max-w-6xl mx-auto">
 
         <!-- Toast / Notification Banner -->
-        <div id="toastBanner" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-2">
-            <div id="toastContent" class="px-5 py-2.5 rounded-full bg-slate-900/95 border border-cyan-400 text-cyan-200 font-semibold text-sm shadow-2xl">
+        <div id="toastBanner"
+            class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-2">
+            <div id="toastContent"
+                class="px-5 py-2.5 rounded-full bg-slate-900/95 border border-cyan-400 text-cyan-200 font-semibold text-sm shadow-2xl">
                 Notification
             </div>
         </div>
@@ -161,9 +221,11 @@
             <!-- Left & Center Setup -->
             <div class="lg:col-span-8 arcade-panel rounded-2xl p-5 sm:p-6 flex flex-col justify-between space-y-5">
                 <!-- Header + Online Quick Launch -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div
+                    class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                     <div>
-                        <div class="inline-flex flex-wrap items-center gap-2 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold uppercase tracking-wider mb-2">
+                        <div
+                            class="inline-flex flex-wrap items-center gap-2 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold uppercase tracking-wider mb-2">
                             <span>🤖 Tactical AI</span>
                             <span>•</span>
                             <span>💣 Cap 4 Bombs</span>
@@ -176,7 +238,8 @@
                             ENTER THE <span class="text-cyan-400">CYBER ARENA</span>
                         </h2>
                     </div>
-                    <button id="btnOpenOnlineHub" class="btn-arcade px-5 py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-600 text-slate-950 font-black text-xs sm:text-sm glow-cyan whitespace-nowrap shrink-0">
+                    <button id="btnOpenOnlineHub"
+                        class="btn-arcade px-5 py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-600 text-slate-950 font-black text-xs sm:text-sm glow-cyan whitespace-nowrap shrink-0">
                         🌐 PLAY ONLINE
                     </button>
                 </div>
@@ -184,10 +247,14 @@
                 <!-- Visual 8-Map Selector + Random -->
                 <div>
                     <div class="flex items-center justify-between mb-2.5">
-                        <h3 class="font-arcade text-xs sm:text-sm font-bold text-amber-300 uppercase tracking-wider">🗺️ Select Arena Map (5 Classic + 3 Big)</h3>
-                        <span id="localMapDescText" class="text-xs text-cyan-300 font-semibold truncate max-w-[58%]">Classic steel grid with balanced cover.</span>
+                        <h3 class="font-arcade text-xs sm:text-sm font-bold text-amber-300 uppercase tracking-wider">🗺️
+                            Select Arena Map (5 Classic + 3 Big)</h3>
+                        <span id="localMapDescText"
+                            class="text-xs text-cyan-300 font-semibold truncate max-w-[58%]">Classic steel grid with
+                            balanced cover.</span>
                     </div>
-                    <div id="localMapSelectorGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                    <div id="localMapSelectorGrid"
+                        class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
                         <!-- Dynamically rendered with mini-map canvases -->
                     </div>
                 </div>
@@ -197,7 +264,8 @@
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                             <label class="block text-[11px] uppercase text-slate-400 font-bold mb-1">Game Mode</label>
-                            <select id="localModeSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-cyan-400">
+                            <select id="localModeSelect"
+                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-cyan-400">
                                 <option value="1p_4ffa">Solo: 1P vs 3 Smart AI</option>
                                 <option value="1p_1v1">Solo: 1P vs 1 Smart AI</option>
                                 <option value="2p_4ffa">Local 2P + 2 Smart AI</option>
@@ -205,16 +273,20 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[11px] uppercase text-slate-400 font-bold mb-1">AI Tactical Tier</label>
-                            <select id="localAiDifficulty" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-cyan-400">
+                            <label class="block text-[11px] uppercase text-slate-400 font-bold mb-1">AI Tactical
+                                Tier</label>
+                            <select id="localAiDifficulty"
+                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-cyan-400">
                                 <option value="normal">Normal (Smart Evasion)</option>
                                 <option value="hard" selected>Hard (Aggressive Hunter)</option>
                                 <option value="ruthless">Ruthless (Predictive Trap)</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[11px] uppercase text-slate-400 font-bold mb-1">Match Target</label>
-                            <select id="localWinsTarget" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-cyan-400">
+                            <label class="block text-[11px] uppercase text-slate-400 font-bold mb-1">Match
+                                Target</label>
+                            <select id="localWinsTarget"
+                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-cyan-400">
                                 <option value="1">1 Round Win</option>
                                 <option value="3" selected>First to 3 Wins</option>
                                 <option value="5">First to 5 Wins</option>
@@ -222,7 +294,8 @@
                         </div>
                     </div>
 
-                    <button id="btnStartLocal" class="btn-arcade w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-sm sm:text-base glow-amber">
+                    <button id="btnStartLocal"
+                        class="btn-arcade w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-sm sm:text-base glow-amber">
                         ⚡ DEPLOY LOCAL / SOLO MATCH
                     </button>
                 </div>
@@ -231,55 +304,83 @@
             <!-- Right Panel: Controls & Pickups Legend -->
             <div class="lg:col-span-4 arcade-panel rounded-2xl p-5 flex flex-col justify-between space-y-5">
                 <div>
-                    <h3 class="font-arcade text-xs sm:text-sm font-bold text-pink-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">
+                    <h3
+                        class="font-arcade text-xs sm:text-sm font-bold text-pink-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">
                         🕹️ Controls Legend
                     </h3>
                     <div class="space-y-2 text-sm">
                         <div class="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800 space-y-1">
                             <div class="flex items-center justify-between">
                                 <span class="font-bold text-rose-400">P1 / Online</span>
-                                <span class="text-slate-200 text-xs"><kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">WASD</kbd> + <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">SPACE</kbd></span>
+                                <span class="text-slate-200 text-xs"><kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">WASD</kbd>
+                                    + <kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">SPACE</kbd></span>
                             </div>
                             <div class="flex items-center justify-between text-[11px] text-slate-400">
-                                <span>Swap Rare / Bombs: <kbd class="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono">Q</kbd></span>
-                                <span>Detonate: <kbd class="px-1.5 py-0.5 bg-slate-800 text-fuchsia-300 rounded border border-slate-600 font-mono">E</kbd></span>
+                                <span>Swap Rare / Bombs: <kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono">Q</kbd></span>
+                                <span>Detonate: <kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 text-fuchsia-300 rounded border border-slate-600 font-mono">E</kbd></span>
                             </div>
                         </div>
                         <div class="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800 space-y-1">
                             <div class="flex items-center justify-between">
                                 <span class="font-bold text-cyan-400">P2 (Local)</span>
-                                <span class="text-slate-200 text-xs"><kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">ARROWS</kbd> + <kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">ENTER</kbd></span>
+                                <span class="text-slate-200 text-xs"><kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">ARROWS</kbd>
+                                    + <kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600 font-mono">ENTER</kbd></span>
                             </div>
                             <div class="flex items-center justify-between text-[11px] text-slate-400">
-                                <span>Swap: <kbd class="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono">R-SHIFT</kbd> / <kbd class="px-1 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono">/</kbd></span>
-                                <span>Detonate: <kbd class="px-1.5 py-0.5 bg-slate-800 text-fuchsia-300 rounded border border-slate-600 font-mono">R-CTRL</kbd> / <kbd class="px-1 bg-slate-800 text-fuchsia-300 rounded border border-slate-600 font-mono">.</kbd></span>
+                                <span>Swap: <kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono">R-SHIFT</kbd>
+                                    / <kbd
+                                        class="px-1 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono">/</kbd></span>
+                                <span>Detonate: <kbd
+                                        class="px-1.5 py-0.5 bg-slate-800 text-fuchsia-300 rounded border border-slate-600 font-mono">R-CTRL</kbd>
+                                    / <kbd
+                                        class="px-1 bg-slate-800 text-fuchsia-300 rounded border border-slate-600 font-mono">.</kbd></span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div>
-                    <h3 class="font-arcade text-xs sm:text-sm font-bold text-cyan-300 uppercase tracking-wider mb-2.5 border-b border-slate-800 pb-2">
+                    <h3
+                        class="font-arcade text-xs sm:text-sm font-bold text-cyan-300 uppercase tracking-wider mb-2.5 border-b border-slate-800 pb-2">
                         🔋 Upgrades & Sudden Death Rare Drops
                     </h3>
                     <div class="space-y-1.5 text-xs">
-                        <div class="flex items-center gap-2 bg-slate-900/75 p-1.5 rounded-lg border border-slate-800/80">
-                            <span class="w-6 h-6 rounded-md bg-blue-500/20 border border-blue-400 flex items-center justify-center text-xs shrink-0">💣</span>
-                            <div><strong class="text-blue-300">Extra Bomb (Cap 4)</strong> • <strong class="text-orange-300">🔥 Flame</strong> • <strong class="text-emerald-300">⚡ Turbo</strong> • <strong class="text-cyan-300">🛡️ Shield</strong></div>
+                        <div
+                            class="flex items-center gap-2 bg-slate-900/75 p-1.5 rounded-lg border border-slate-800/80">
+                            <span
+                                class="w-6 h-6 rounded-md bg-blue-500/20 border border-blue-400 flex items-center justify-center text-xs shrink-0">💣</span>
+                            <div><strong class="text-blue-300">Extra Bomb (Cap 4)</strong> • <strong
+                                    class="text-orange-300">🔥 Flame</strong> • <strong class="text-emerald-300">⚡
+                                    Turbo</strong> • <strong class="text-cyan-300">🛡️ Shield</strong></div>
                         </div>
-                        <div class="flex items-center gap-2 bg-purple-950/35 p-1.5 rounded-lg border border-purple-500/30">
-                            <span class="w-6 h-6 rounded-md bg-purple-500/20 border border-purple-400 flex items-center justify-center text-xs shrink-0">☠️</span>
-                            <div><strong class="text-purple-300">Virus Glitch:</strong> Inverts controls, slows, or overloads bombs!</div>
+                        <div
+                            class="flex items-center gap-2 bg-purple-950/35 p-1.5 rounded-lg border border-purple-500/30">
+                            <span
+                                class="w-6 h-6 rounded-md bg-purple-500/20 border border-purple-400 flex items-center justify-center text-xs shrink-0">☠️</span>
+                            <div><strong class="text-purple-300">Virus Glitch:</strong> Inverts controls, slows, or
+                                overloads bombs!</div>
                         </div>
                         <div class="flex items-center gap-2 bg-amber-950/35 p-2 rounded-lg border border-amber-400/50">
-                            <span class="w-6 h-6 rounded-md bg-amber-400/25 border border-amber-300 flex items-center justify-center text-xs shrink-0">✨</span>
+                            <span
+                                class="w-6 h-6 rounded-md bg-amber-400/25 border border-amber-300 flex items-center justify-center text-xs shrink-0">✨</span>
                             <div>
                                 <strong class="text-amber-300">Sudden Death (at 0:00) Shining Vault Block:</strong>
-                                <span class="text-slate-300"> 1 per match (2 on Big Maps). Blast it open for a Rare Drop:</span>
+                                <span class="text-slate-300"> 1 per match (2 on Big Maps). Blast it open for a Rare
+                                    Drop:</span>
                                 <div class="mt-1 text-[11px] text-slate-200 space-y-0.5">
-                                    <div>🎯 <strong class="text-cyan-300">Sniper (3 Bullets):</strong> Piercing high-speed rail shot.</div>
-                                    <div>🔪 <strong class="text-rose-300">Plasma Knife:</strong> Instant close-quarters kill on same block.</div>
-                                    <div>🧨 <strong class="text-fuchsia-300">Detonator C4 (Max 2):</strong> Violet max-radius remote bombs!</div>
+                                    <div>🎯 <strong class="text-cyan-300">Sniper (3 Bullets):</strong> Piercing
+                                        high-speed rail shot.</div>
+                                    <div>🔪 <strong class="text-rose-300">Plasma Knife:</strong> Instant close-quarters
+                                        kill on same block.</div>
+                                    <div>🧨 <strong class="text-fuchsia-300">Detonator C4 (Max 2):</strong> Violet
+                                        max-radius remote bombs!</div>
                                 </div>
                             </div>
                         </div>
@@ -290,40 +391,53 @@
 
         <!-- VIEW 2: ONLINE MULTIPLAYER HUB -->
         <section id="viewOnlineHub" class="hidden w-full max-w-4xl arcade-panel rounded-2xl p-6 sm:p-7">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-5">
+            <div
+                class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-5">
                 <div>
                     <h2 class="font-arcade text-2xl font-black text-cyan-300">🌐 ONLINE ARENA NETWORK</h2>
-                    <p class="text-xs sm:text-sm text-slate-400 mt-0.5">Pilot ID: <span id="displayUserId" class="font-mono text-xs text-cyan-200 bg-slate-900 px-2 py-0.5 rounded select-all">Authenticating...</span></p>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-0.5">Pilot ID: <span id="displayUserId"
+                            class="font-mono text-xs text-cyan-200 bg-slate-900 px-2 py-0.5 rounded select-all">Authenticating...</span>
+                    </p>
                 </div>
-                <button id="btnBackFromOnlineHub" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold border border-slate-600">
+                <button id="btnBackFromOnlineHub"
+                    class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold border border-slate-600">
                     ← Back to Menu
                 </button>
             </div>
 
-            <div class="mb-5 bg-slate-900/90 p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div
+                class="mb-5 bg-slate-900/90 p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <label class="text-sm font-bold text-slate-300 uppercase tracking-wider">Robot Callsign:</label>
-                <input id="inputPlayerName" type="text" maxlength="14" placeholder="Enter Pilot Name" class="bg-slate-950 border border-cyan-500/40 rounded-lg px-4 py-2 text-white font-arcade text-sm focus:outline-none focus:border-cyan-400 w-full sm:w-64">
+                <input id="inputPlayerName" type="text" maxlength="14" placeholder="Enter Pilot Name"
+                    class="bg-slate-950 border border-cyan-500/40 rounded-lg px-4 py-2 text-white font-arcade text-sm focus:outline-none focus:border-cyan-400 w-full sm:w-64">
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                <div class="p-5 rounded-xl bg-gradient-to-br from-cyan-950/60 to-slate-900 border border-cyan-500/40 flex flex-col justify-between">
+                <div
+                    class="p-5 rounded-xl bg-gradient-to-br from-cyan-950/60 to-slate-900 border border-cyan-500/40 flex flex-col justify-between">
                     <div>
                         <h3 class="font-arcade text-lg font-bold text-white mb-2">CREATE ARENA ROOM</h3>
-                        <p class="text-sm text-slate-300 mb-4">Host a match with a 5-character Room Code. Pick any of the 5 maps, bot difficulty, and round target.</p>
+                        <p class="text-sm text-slate-300 mb-4">Host a match with a 5-character Room Code. Pick any of
+                            the 5 maps, bot difficulty, and round target.</p>
                     </div>
-                    <button id="btnCreateRoom" class="btn-arcade w-full py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-sm glow-cyan">
+                    <button id="btnCreateRoom"
+                        class="btn-arcade w-full py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-sm glow-cyan">
                         + CREATE NEW ROOM
                     </button>
                 </div>
 
-                <div class="p-5 rounded-xl bg-gradient-to-br from-pink-950/40 to-slate-900 border border-pink-500/40 flex flex-col justify-between">
+                <div
+                    class="p-5 rounded-xl bg-gradient-to-br from-pink-950/40 to-slate-900 border border-pink-500/40 flex flex-col justify-between">
                     <div>
                         <h3 class="font-arcade text-lg font-bold text-white mb-2">JOIN BY ROOM CODE</h3>
-                        <p class="text-sm text-slate-300 mb-3">Enter a friend's 5-character Room Code to deploy directly into their lobby.</p>
+                        <p class="text-sm text-slate-300 mb-3">Enter a friend's 5-character Room Code to deploy directly
+                            into their lobby.</p>
                     </div>
                     <div class="flex gap-2">
-                        <input id="inputJoinCode" type="text" maxlength="5" placeholder="e.g. X7K9P" class="uppercase font-arcade text-center tracking-widest bg-slate-950 border border-pink-500/50 rounded-xl px-3 py-3 text-white font-bold text-base w-full focus:outline-none focus:border-pink-400">
-                        <button id="btnJoinByCode" class="btn-arcade px-6 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black text-sm glow-pink">
+                        <input id="inputJoinCode" type="text" maxlength="5" placeholder="e.g. X7K9P"
+                            class="uppercase font-arcade text-center tracking-widest bg-slate-950 border border-pink-500/50 rounded-xl px-3 py-3 text-white font-bold text-base w-full focus:outline-none focus:border-pink-400">
+                        <button id="btnJoinByCode"
+                            class="btn-arcade px-6 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black text-sm glow-pink">
                             JOIN
                         </button>
                     </div>
@@ -332,11 +446,13 @@
 
             <div>
                 <div class="flex items-center justify-between mb-3">
-                    <h3 class="font-arcade text-sm font-bold text-slate-300 uppercase tracking-wider">📡 Active Public Lobbies</h3>
+                    <h3 class="font-arcade text-sm font-bold text-slate-300 uppercase tracking-wider">📡 Active Public
+                        Lobbies</h3>
                     <span class="text-xs text-cyan-400">Real-Time Sync</span>
                 </div>
                 <div id="openRoomsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-1">
-                    <div class="col-span-full text-center py-6 text-slate-500 text-sm bg-slate-900/50 rounded-xl border border-slate-800">
+                    <div
+                        class="col-span-full text-center py-6 text-slate-500 text-sm bg-slate-900/50 rounded-xl border border-slate-800">
                         Scanning cyber-network for open rooms...
                     </div>
                 </div>
@@ -345,17 +461,21 @@
 
         <!-- VIEW 3: ONLINE ROOM LOBBY -->
         <section id="viewRoomLobby" class="hidden w-full max-w-5xl arcade-panel rounded-2xl p-6">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-5">
+            <div
+                class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-5">
                 <div>
                     <div class="flex items-center gap-3">
-                        <h2 class="font-arcade text-2xl font-black text-white">ROOM: <span id="lobbyRoomCode" class="text-cyan-400 tracking-widest">-----</span></h2>
-                        <button id="btnCopyRoomCode" class="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold transition">
+                        <h2 class="font-arcade text-2xl font-black text-white">ROOM: <span id="lobbyRoomCode"
+                                class="text-cyan-400 tracking-widest">-----</span></h2>
+                        <button id="btnCopyRoomCode"
+                            class="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-300 text-xs font-bold transition">
                             📋 COPY CODE
                         </button>
                     </div>
                     <p id="lobbyRoleSubtitle" class="text-xs sm:text-sm text-slate-400 mt-1">Waiting for players...</p>
                 </div>
-                <button id="btnLeaveRoom" class="px-4 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-sm font-bold border border-rose-500/40">
+                <button id="btnLeaveRoom"
+                    class="px-4 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 text-sm font-bold border border-rose-500/40">
                     Leave Room
                 </button>
             </div>
@@ -364,43 +484,54 @@
                 <!-- Left: Players & Map Selector -->
                 <div class="lg:col-span-7 space-y-5">
                     <div>
-                        <h3 class="font-arcade text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">Combatant Slots (Max 4)</h3>
+                        <h3 class="font-arcade text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
+                            Combatant Slots (Max 4)</h3>
                         <div id="lobbyPlayersContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
                     </div>
 
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <h3 class="font-arcade text-xs font-bold text-amber-300 uppercase tracking-wider">🗺️ Arena Map Selection</h3>
+                            <h3 class="font-arcade text-xs font-bold text-amber-300 uppercase tracking-wider">🗺️ Arena
+                                Map Selection</h3>
                             <span id="lobbyMapDescText" class="text-xs text-cyan-300 font-semibold">Cyber Foundry</span>
                         </div>
-                        <div id="lobbyMapSelectorGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-1"></div>
+                        <div id="lobbyMapSelectorGrid"
+                            class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-1"></div>
                     </div>
                 </div>
 
                 <!-- Right: Settings & Launch -->
-                <div class="lg:col-span-5 bg-slate-900/90 p-5 rounded-xl border border-slate-800 flex flex-col justify-between space-y-4">
+                <div
+                    class="lg:col-span-5 bg-slate-900/90 p-5 rounded-xl border border-slate-800 flex flex-col justify-between space-y-4">
                     <div class="space-y-3.5">
-                        <h3 class="font-arcade text-xs font-bold text-amber-300 uppercase tracking-wider border-b border-slate-800 pb-2">
+                        <h3
+                            class="font-arcade text-xs font-bold text-amber-300 uppercase tracking-wider border-b border-slate-800 pb-2">
                             ⚙️ Match Configuration
                         </h3>
                         <div>
-                            <label class="block text-xs uppercase text-slate-400 font-bold mb-1">Victories Needed</label>
-                            <select id="lobbyWinsSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold">
+                            <label class="block text-xs uppercase text-slate-400 font-bold mb-1">Victories
+                                Needed</label>
+                            <select id="lobbyWinsSelect"
+                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold">
                                 <option value="1">1 Round Win</option>
                                 <option value="3" selected>3 Round Wins</option>
                                 <option value="5">5 Round Wins</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs uppercase text-slate-400 font-bold mb-1">Empty Slots AI Fill</label>
-                            <select id="lobbyBotFillSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold">
+                            <label class="block text-xs uppercase text-slate-400 font-bold mb-1">Empty Slots AI
+                                Fill</label>
+                            <select id="lobbyBotFillSelect"
+                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold">
                                 <option value="none">No AI Bots (Players Only)</option>
                                 <option value="fill" selected>Fill Empty Slots with AI</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs uppercase text-slate-400 font-bold mb-1">AI Tactical Tier</label>
-                            <select id="lobbyBotDiffSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold">
+                            <label class="block text-xs uppercase text-slate-400 font-bold mb-1">AI Tactical
+                                Tier</label>
+                            <select id="lobbyBotDiffSelect"
+                                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-semibold">
                                 <option value="normal">Normal (Smart Evasion)</option>
                                 <option value="hard" selected>Hard (Aggressive Hunter)</option>
                                 <option value="ruthless">Ruthless (Predictive Trap)</option>
@@ -409,10 +540,12 @@
                     </div>
 
                     <div class="space-y-2.5 pt-2">
-                        <button id="btnToggleReady" class="btn-arcade w-full py-3 rounded-xl bg-emerald-500 text-slate-950 font-black text-sm">
+                        <button id="btnToggleReady"
+                            class="btn-arcade w-full py-3 rounded-xl bg-emerald-500 text-slate-950 font-black text-sm">
                             ✓ READY UP
                         </button>
-                        <button id="btnHostStartOnline" class="hidden btn-arcade w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-sm glow-cyan">
+                        <button id="btnHostStartOnline"
+                            class="hidden btn-arcade w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-sm glow-cyan">
                             🚀 LAUNCH ARENA BATTLE
                         </button>
                     </div>
@@ -425,17 +558,21 @@
             <!-- Match Status Strip (Map Name + Round + Timer / Sudden Death) -->
             <div class="w-full max-w-4xl flex items-center justify-between gap-2 mb-2 px-1">
                 <div class="flex items-center gap-2">
-                    <span id="hudMapBadge" class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-cyan-500/40 text-cyan-300 font-arcade text-[11px] font-bold uppercase">
+                    <span id="hudMapBadge"
+                        class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-cyan-500/40 text-cyan-300 font-arcade text-[11px] font-bold uppercase">
                         CYBER FOUNDRY
                     </span>
-                    <span id="hudRoundBadge" class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-300 font-arcade text-[11px] font-bold">
+                    <span id="hudRoundBadge"
+                        class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-300 font-arcade text-[11px] font-bold">
                         ROUND 1
                     </span>
                 </div>
-                <div id="hudTimerBox" class="px-3.5 py-1 rounded-lg bg-slate-900/95 border border-slate-700 font-arcade text-sm font-black text-white flex items-center gap-2 transition-all">
+                <div id="hudTimerBox"
+                    class="px-3.5 py-1 rounded-lg bg-slate-900/95 border border-slate-700 font-arcade text-sm font-black text-white flex items-center gap-2 transition-all">
                     <span id="hudTimerIcon">⏱️</span>
                     <span id="hudTimerValue">1:30</span>
-                    <span id="hudSdLabel" class="hidden text-[10px] text-rose-400 tracking-wider">SUDDEN DEATH • RARE DROP!</span>
+                    <span id="hudSdLabel" class="hidden text-[10px] text-rose-400 tracking-wider">SUDDEN DEATH • RARE
+                        DROP!</span>
                 </div>
             </div>
 
@@ -447,8 +584,10 @@
                 <canvas id="gameCanvas"></canvas>
 
                 <!-- Round / Match Overlay Modal -->
-                <div id="arenaOverlay" class="hidden absolute inset-0 rounded-xl bg-slate-950/82 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10">
-                    <div id="overlayBadge" class="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-arcade uppercase tracking-widest mb-2">
+                <div id="arenaOverlay"
+                    class="hidden absolute inset-0 rounded-xl bg-slate-950/82 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10">
+                    <div id="overlayBadge"
+                        class="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-arcade uppercase tracking-widest mb-2">
                         ROUND COMPLETE
                     </div>
                     <h2 id="overlayTitle" class="font-arcade text-2xl sm:text-4xl font-black text-white mb-2">
@@ -458,13 +597,16 @@
                         Preparing next arena deployment...
                     </p>
                     <div class="flex flex-wrap justify-center gap-3">
-                        <button id="btnNextRound" class="btn-arcade px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-sm glow-cyan">
+                        <button id="btnNextRound"
+                            class="btn-arcade px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-black text-sm glow-cyan">
                             NEXT ROUND
                         </button>
-                        <button id="btnPlayAgain" class="hidden btn-arcade px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-sm glow-amber">
+                        <button id="btnPlayAgain"
+                            class="hidden btn-arcade px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-sm glow-amber">
                             REMATCH
                         </button>
-                        <button id="btnOverlayExit" class="btn-arcade px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+                        <button id="btnOverlayExit"
+                            class="btn-arcade px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
                             MAIN MENU
                         </button>
                     </div>
@@ -472,28 +614,36 @@
             </div>
 
             <!-- Mobile Touch Controls -->
-            <div id="mobileTouchControls" class="mt-3 w-full max-w-md flex sm:hidden items-center justify-between px-3 select-none">
+            <div id="mobileTouchControls"
+                class="mt-3 w-full max-w-md flex sm:hidden items-center justify-between px-3 select-none">
                 <div class="grid grid-cols-3 gap-1.5 w-36 h-36">
                     <div></div>
-                    <button data-dir="up" class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">▲</button>
+                    <button data-dir="up"
+                        class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">▲</button>
                     <div></div>
-                    <button data-dir="left" class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">◀</button>
+                    <button data-dir="left"
+                        class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">◀</button>
                     <div class="bg-slate-900/50 rounded-xl border border-slate-800"></div>
-                    <button data-dir="right" class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">▶</button>
+                    <button data-dir="right"
+                        class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">▶</button>
                     <div></div>
-                    <button data-dir="down" class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">▼</button>
+                    <button data-dir="down"
+                        class="touch-dir bg-slate-800/90 active:bg-cyan-500/50 border border-slate-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">▼</button>
                     <div></div>
                 </div>
                 <div class="flex flex-col items-end gap-2">
                     <div class="flex gap-2">
-                        <button id="btnTouchSwap" class="hidden px-3 py-2 rounded-xl bg-amber-500/90 active:scale-95 border-2 border-amber-200 text-slate-950 font-arcade font-black text-[10px]">
+                        <button id="btnTouchSwap"
+                            class="hidden px-3 py-2 rounded-xl bg-amber-500/90 active:scale-95 border-2 border-amber-200 text-slate-950 font-arcade font-black text-[10px]">
                             🔄 SWAP
                         </button>
-                        <button id="btnTouchDetonate" class="hidden px-3 py-2 rounded-xl bg-fuchsia-600/90 active:scale-95 border-2 border-fuchsia-300 text-white font-arcade font-black text-[10px]">
+                        <button id="btnTouchDetonate"
+                            class="hidden px-3 py-2 rounded-xl bg-fuchsia-600/90 active:scale-95 border-2 border-fuchsia-300 text-white font-arcade font-black text-[10px]">
                             💥 DET
                         </button>
                     </div>
-                    <button id="btnTouchBomb" class="w-24 h-24 rounded-full bg-gradient-to-br from-rose-500 to-orange-600 active:scale-95 border-4 border-rose-300/60 shadow-lg shadow-rose-600/40 flex flex-col items-center justify-center text-white font-arcade font-black text-xs">
+                    <button id="btnTouchBomb"
+                        class="w-24 h-24 rounded-full bg-gradient-to-br from-rose-500 to-orange-600 active:scale-95 border-4 border-rose-300/60 shadow-lg shadow-rose-600/40 flex flex-col items-center justify-center text-white font-arcade font-black text-xs">
                         <span id="touchActionIcon" class="text-2xl mb-0.5">💣</span>
                         <span id="touchActionLabel">BOMB</span>
                     </button>
@@ -505,7 +655,8 @@
 
     <!-- Footer -->
     <footer class="w-full py-2.5 px-4 text-center text-xs text-slate-500 border-t border-slate-900">
-        BOMBER ROBOT ONLINE • 8 Arenas (3 Big) • WASD+Space / Q Swap / E Detonate • Arrows+Enter / R-Shift Swap / R-Ctrl Detonate
+        BOMBER ROBOT ONLINE • 8 Arenas (3 Big) • WASD+Space / Q Swap / E Detonate • Arrows+Enter / R-Shift Swap / R-Ctrl
+        Detonate
     </footer>
 
     <!-- Firebase SDK + Complete Game Engine -->
@@ -528,7 +679,7 @@
                     if (AudioCtx) this.ctx = new AudioCtx();
                 }
                 if (this.ctx && this.ctx.state === 'suspended') {
-                    this.ctx.resume().catch(() => {});
+                    this.ctx.resume().catch(() => { });
                 }
             }
             toggleMute() {
@@ -554,7 +705,7 @@
                     gain.connect(this.ctx.destination);
                     osc.start(t0);
                     osc.stop(t0 + duration + 0.01);
-                } catch (e) {}
+                } catch (e) { }
             }
             bombDrop() {
                 // Mechanical metallic click + thud
@@ -604,7 +755,7 @@
                     filter.connect(gain);
                     gain.connect(this.ctx.destination);
                     noise.start(now);
-                } catch (e) {}
+                } catch (e) { }
             }
             powerup() {
                 this.playTone(523.25, 'sine', 0.07, 0.14, null, 0);
@@ -731,14 +882,14 @@
         }
 
         const POWERUP_TYPES = {
-            BOMB:      { id: 'BOMB',      label: '+1 BOMB',       color: '#3b82f6', icon: '💣', isRare: false },
-            FIRE:      { id: 'FIRE',      label: '+1 FLAME',      color: '#f97316', icon: '🔥', isRare: false },
-            SPEED:     { id: 'SPEED',     label: 'TURBO!',        color: '#10b981', icon: '⚡', isRare: false },
-            SHIELD:    { id: 'SHIELD',    label: 'SHIELD!',       color: '#06b6d4', icon: '🛡️', isRare: false },
-            VIRUS:     { id: 'VIRUS',     label: 'GLITCH!',       color: '#a855f7', icon: '☠️', isRare: false },
-            SNIPER:    { id: 'SNIPER',    label: 'SNIPER (3)',    color: '#38bdf8', icon: '🎯', isRare: true  },
-            KNIFE:     { id: 'KNIFE',     label: 'PLASMA KNIFE',  color: '#fb7185', icon: '🔪', isRare: true  },
-            DETONATOR: { id: 'DETONATOR', label: 'DETONATOR C4',  color: '#e879f9', icon: '🧨', isRare: true  }
+            BOMB: { id: 'BOMB', label: '+1 BOMB', color: '#3b82f6', icon: '💣', isRare: false },
+            FIRE: { id: 'FIRE', label: '+1 FLAME', color: '#f97316', icon: '🔥', isRare: false },
+            SPEED: { id: 'SPEED', label: 'TURBO!', color: '#10b981', icon: '⚡', isRare: false },
+            SHIELD: { id: 'SHIELD', label: 'SHIELD!', color: '#06b6d4', icon: '🛡️', isRare: false },
+            VIRUS: { id: 'VIRUS', label: 'GLITCH!', color: '#a855f7', icon: '☠️', isRare: false },
+            SNIPER: { id: 'SNIPER', label: 'SNIPER (3)', color: '#38bdf8', icon: '🎯', isRare: true },
+            KNIFE: { id: 'KNIFE', label: 'PLASMA KNIFE', color: '#fb7185', icon: '🔪', isRare: true },
+            DETONATOR: { id: 'DETONATOR', label: 'DETONATOR C4', color: '#e879f9', icon: '🧨', isRare: true }
         };
 
         const RARE_DROP_POOL = ['SNIPER', 'KNIFE', 'DETONATOR'];
@@ -1142,6 +1293,15 @@
             lastProcessedRoundSeed: null,
             remoteInputs: {}
         };
+
+        const __firebase_config = JSON.stringify({
+            apiKey: "AIzaSyCsd9NFcbjut6RYxulFlP-0Cs14Sg4C_uQ",
+            authDomain: "bomber-robot-online.firebaseapp.com",
+            projectId: "bomber-robot-online",
+            storageBucket: "bomber-robot-online.firebasestorage.app",
+            messagingSenderId: "624198268651",
+            appId: "1:624198268651:web:0ed896c543bf41fd8cf0ae"
+        });
 
         async function initFirebase() {
             const dot = document.getElementById('netStatusDot');
@@ -1590,7 +1750,7 @@
             }
         }
 
-        window.joinOnlineRoom = async function(rawCode) {
+        window.joinOnlineRoom = async function (rawCode) {
             if (!firebaseReady || !currentUser) {
                 showToast('Online service not connected.', true);
                 return;
@@ -1712,7 +1872,7 @@
             renderMapSelector('lobbyMapSelectorGrid', 'lobbyMapDescText', uiSelection.lobbyMap, async (chosenMapId) => {
                 if (!netState.isHost || !netState.roomCode || !firebaseReady || !currentUser) return;
                 const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'bomber_rooms', netState.roomCode);
-                await updateDoc(roomDocRef, { mapChoice: chosenMapId, updatedAt: Date.now() }).catch(() => {});
+                await updateDoc(roomDocRef, { mapChoice: chosenMapId, updatedAt: Date.now() }).catch(() => { });
             }, !netState.isHost);
 
             const startBtn = document.getElementById('btnHostStartOnline');
@@ -2035,7 +2195,7 @@
                             updatedAt: Date.now()
                         });
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             netState.isOnline = false;
             netState.roomCode = null;
@@ -2337,9 +2497,9 @@
             if (robot.actionCooldown > 0) return false;
 
             const dirVec = {
-                up:    { dx: 0, dy: -1 },
-                down:  { dx: 0, dy: 1 },
-                left:  { dx: -1, dy: 0 },
+                up: { dx: 0, dy: -1 },
+                down: { dx: 0, dy: 1 },
+                left: { dx: -1, dy: 0 },
                 right: { dx: 1, dy: 0 }
             }[robot.dir] || { dx: 0, dy: 1 };
 
@@ -3441,7 +3601,7 @@
                             detonate: inputs.p1Det,
                             ts: Date.now()
                         }
-                    }).catch(() => {});
+                    }).catch(() => { });
                 }
                 game.prevKeys = { ...game.keys };
                 return;
@@ -3536,7 +3696,7 @@
                     updateDoc(roomDocRef, {
                         gameState: serializeOnlineGameState(),
                         updatedAt: Date.now()
-                    }).catch(() => {});
+                    }).catch(() => { });
                 }
             }
 
@@ -4710,7 +4870,7 @@
                     botFill: document.getElementById('lobbyBotFillSelect').value,
                     botDiff: document.getElementById('lobbyBotDiffSelect').value,
                     updatedAt: Date.now()
-                }).catch(() => {});
+                }).catch(() => { });
             });
         });
 
@@ -4720,7 +4880,7 @@
             const snap = await getDoc(roomDocRef);
             if (!snap.exists()) return;
             const currentReady = snap.data().players?.[netState.mySlot]?.ready || false;
-            await updateDoc(roomDocRef, { [`players.${netState.mySlot}.ready`]: !currentReady }).catch(() => {});
+            await updateDoc(roomDocRef, { [`players.${netState.mySlot}.ready`]: !currentReady }).catch(() => { });
         });
 
         document.getElementById('btnHostStartOnline').addEventListener('click', hostLaunchOnlineMatch);
@@ -4756,4 +4916,5 @@
         };
     </script>
 </body>
+
 </html>
