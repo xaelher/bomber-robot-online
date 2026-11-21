@@ -1574,6 +1574,13 @@
                 warpCooldown: 0,
                 walkAnim: 0,
                 moving: false,
+                netTargetX: spawn.c + 0.5,
+                netTargetY: spawn.r + 0.5,
+                netDir: 'down',
+                netMoving: false,
+                netDx: 0,
+                netDy: 0,
+                netLastPacketTime: 0,
                 // Rare Drop Weapon System
                 rareItem: null,        // null | 'SNIPER' | 'KNIFE' | 'DETONATOR'
                 rareAmmo: 0,           // 3 for Sniper, -1 (unlimited) for Knife/Detonator
@@ -2248,7 +2255,8 @@
                 robots: game.robots.map(r => ({
                     slot: r.slot, uid: r.uid, name: r.name,
                     controlType: r.controlType, aiDifficulty: r.aiDifficulty,
-                    x: Number(r.x.toFixed(3)), y: Number(r.y.toFixed(3)),
+                    x: Number((r.alive && r.controlType === 'online_remote' && r.netTargetX !== undefined ? r.netTargetX : r.x).toFixed(3)),
+                    y: Number((r.alive && r.controlType === 'online_remote' && r.netTargetY !== undefined ? r.netTargetY : r.y).toFixed(3)),
                     dir: r.dir, moving: r.moving, alive: r.alive,
                     wins: r.wins, score: r.score,
                     maxBombs: r.maxBombs, activeBombs: r.activeBombs,
@@ -4026,9 +4034,10 @@
                     last.bomb !== cur.bomb ||
                     hasAction;
 
+                const isMoving = cur.dx !== 0 || cur.dy !== 0 || (myRobot && myRobot.moving);
                 const timeSincePush = now - (netState.lastClientInputPush || 0);
-                // Push immediately on action, or throttled to 33 ms on movement change (~30 Hz), or heartbeat every 250 ms
-                const shouldPush = hasAction || (stateChanged && timeSincePush >= 33) || (timeSincePush >= 250);
+                // Push immediately on action, or throttled to 33 ms while moving or on input change (~30 Hz), or heartbeat every 250 ms
+                const shouldPush = hasAction || ((stateChanged || isMoving) && timeSincePush >= 33) || (timeSincePush >= 250);
 
                 if (firebaseReady && currentUser && netState.roomCode && shouldPush && myRobot) {
                     netState.lastClientInputPush = now;
@@ -4074,7 +4083,7 @@
                         robot.y += (robot.netTargetY - robot.y) * alpha;
                         if (robot.netDir) robot.dir = robot.netDir;
                         robot.moving = robot.netMoving !== undefined ? robot.netMoving : (Math.hypot(robot.netTargetX - robot.x, robot.netTargetY - robot.y) > 0.04);
-                        if (robot.moving) robot.walkAnim += 0.25;
+                        if (robot.moving) robot.walkAnim += robot.speed * dt * 5.2;
                     }
                 }
 
@@ -4133,34 +4142,80 @@
                     // Host checks timeout relative to host's OWN receivedAt time (< 3000 ms)
                     const isFresh = rInp && (Date.now() - (rInp.receivedAt || 0) < 3000);
                     if (isFresh) {
-                        // 1. Position validation: trust client coordinates if within reasonable distance & not solid
-                        if (rInp.warpSeq && rInp.warpSeq !== robot._lastRemoteWarpSeq) {
-                            robot._lastRemoteWarpSeq = rInp.warpSeq;
-                            robot.x = rInp.x;
-                            robot.y = rInp.y;
-                            if (rInp.dir) robot.dir = rInp.dir;
-                            robot.moving = !!rInp.moving;
-                            sfx.warp();
-                            spawnWarpBurst(robot.x, robot.y, '#00f3ff');
-                        } else if (rInp.x !== undefined && rInp.y !== undefined) {
-                            const targetC = Math.floor(rInp.x);
-                            const targetR = Math.floor(rInp.y);
-                            const inBounds = targetC >= 0 && targetC < game.cols && targetR >= 0 && targetR < game.rows;
-                            const tile = inBounds ? game.grid[targetR][targetC] : TILE_WALL;
-                            const isWalkable = inBounds && !isSolidTile(tile) && tile !== TILE_LAVA && tile !== TILE_CRUSHER;
-                            const dist = Math.hypot(rInp.x - robot.x, rInp.y - robot.y);
+                        const seqVal = rInp.seq !== undefined ? rInp.seq : (rInp.ts || 0);
+                        if (seqVal !== robot._lastRemoteSeq) {
+                            robot._lastRemoteSeq = seqVal;
+                            robot.netLastPacketTime = performance.now();
+                            if (rInp.dir) robot.netDir = rInp.dir;
+                            robot.netMoving = !!rInp.moving;
+                            robot.netDx = rInp.dx || 0;
+                            robot.netDy = rInp.dy || 0;
 
-                            if (isWalkable && dist < 2.5) {
+                            // 1. Position validation: trust client coordinates if within reasonable distance & not solid
+                            if (rInp.warpSeq && rInp.warpSeq !== robot._lastRemoteWarpSeq) {
+                                robot._lastRemoteWarpSeq = rInp.warpSeq;
                                 robot.x = rInp.x;
                                 robot.y = rInp.y;
+                                robot.netTargetX = rInp.x;
+                                robot.netTargetY = rInp.y;
                                 if (rInp.dir) robot.dir = rInp.dir;
                                 robot.moving = !!rInp.moving;
-                                if (robot.moving) robot.walkAnim += 0.25;
-                            } else {
-                                moveRobot(robot, rInp.dx || 0, rInp.dy || 0, dt);
+                                sfx.warp();
+                                spawnWarpBurst(robot.x, robot.y, '#00f3ff');
+                            } else if (rInp.x !== undefined && rInp.y !== undefined) {
+                                const targetC = Math.floor(rInp.x);
+                                const targetR = Math.floor(rInp.y);
+                                const inBounds = targetC >= 0 && targetC < game.cols && targetR >= 0 && targetR < game.rows;
+                                const tile = inBounds ? game.grid[targetR][targetC] : TILE_WALL;
+                                const isWalkable = inBounds && !isSolidTile(tile) && tile !== TILE_LAVA && tile !== TILE_CRUSHER;
+                                const dist = Math.hypot(rInp.x - robot.x, rInp.y - robot.y);
+
+                                if (isWalkable) {
+                                    if (dist > 2.5) {
+                                        // Snap if large jump (round start / sudden desync)
+                                        robot.x = rInp.x;
+                                        robot.y = rInp.y;
+                                        robot.netTargetX = rInp.x;
+                                        robot.netTargetY = rInp.y;
+                                    } else {
+                                        robot.netTargetX = rInp.x;
+                                        robot.netTargetY = rInp.y;
+                                    }
+                                }
                             }
-                        } else {
-                            moveRobot(robot, rInp.dx || 0, rInp.dy || 0, dt);
+                        }
+
+                        // Smooth frame-by-frame interpolation + velocity extrapolation on host (60+ FPS)
+                        let targetX = robot.netTargetX !== undefined ? robot.netTargetX : robot.x;
+                        let targetY = robot.netTargetY !== undefined ? robot.netTargetY : robot.y;
+
+                        const timeSincePacket = performance.now() - (robot.netLastPacketTime || 0);
+                        if (timeSincePacket < 120 && robot.netMoving && (robot.netDx || robot.netDy)) {
+                            const leadDist = Math.min(0.35, robot.speed * (timeSincePacket / 1000) * 0.85);
+                            const testX = targetX + Math.sign(robot.netDx) * leadDist;
+                            const testY = targetY + Math.sign(robot.netDy) * leadDist;
+                            const leadC = Math.floor(testX);
+                            const leadR = Math.floor(testY);
+                            if (leadC >= 0 && leadC < game.cols && leadR >= 0 && leadR < game.rows) {
+                                const leadTile = game.grid[leadR][leadC];
+                                if (!isSolidTile(leadTile) && leadTile !== TILE_LAVA && leadTile !== TILE_CRUSHER) {
+                                    const bombOnLead = game.bombs.some(b => b.c === leadC && b.r === leadR && !(b.passSlots && b.passSlots.has(robot.slot)));
+                                    if (!bombOnLead) {
+                                        targetX = testX;
+                                        targetY = testY;
+                                    }
+                                }
+                            }
+                        }
+
+                        const lerpFactor = 1 - Math.exp(-22 * dt);
+                        robot.x += (targetX - robot.x) * lerpFactor;
+                        robot.y += (targetY - robot.y) * lerpFactor;
+
+                        if (robot.netDir) robot.dir = robot.netDir;
+                        robot.moving = !!robot.netMoving || (Math.hypot(targetX - robot.x, targetY - robot.y) > 0.02);
+                        if (robot.moving) {
+                            robot.walkAnim += robot.speed * dt * 5.2;
                         }
 
                         // 2. Action processing by unique actionId
