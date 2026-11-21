@@ -28,16 +28,10 @@ jobs:
       - name: Prepare static site bundle
         run: |
           mkdir -p _site
-          HTML_FILE=$(find . -maxdepth 3 -name "*.html" -not -path "./_site/*" | head -n 1)
-          if [ -f "index.html" ]; then
-            cp index.html _site/index.html
-          elif [ -f "bomber-robot-online.html" ]; then
-            cp bomber-robot-online.html _site/index.html
-          elif [ -n "$HTML_FILE" ]; then
-            cp "$HTML_FILE" _site/index.html
-          else
-            exit 1
-          fi
+          cp index.html _site/index.html
+          if [ -d "css" ]; then cp -r css _site/; fi
+          if [ -d "js" ]; then cp -r js _site/; fi
+          if [ -f "bomber-robot-online.html" ]; then cp bomber-robot-online.html _site/; fi
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5

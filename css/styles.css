@@ -1,0 +1,137 @@
+:root {
+    --neon-cyan: #00f3ff;
+    --neon-pink: #ff007f;
+    --neon-amber: #fbbf24;
+    --neon-emerald: #10b981;
+    --bg-dark: #070b14;
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-dark);
+    color: #e2e8f0;
+    font-family: 'Rajdhani', sans-serif;
+    overflow-x: hidden;
+    background-image:
+        radial-gradient(circle at 12% 18%, rgba(0, 243, 255, 0.09) 0%, transparent 42%),
+        radial-gradient(circle at 88% 82%, rgba(255, 0, 127, 0.09) 0%, transparent 42%),
+        linear-gradient(180deg, rgba(11, 17, 32, 0.94) 0%, rgba(7, 11, 20, 0.98) 100%);
+}
+
+.font-arcade {
+    font-family: 'Orbitron', sans-serif;
+}
+
+.arcade-panel {
+    background: rgba(13, 20, 36, 0.88);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.btn-arcade {
+    font-family: 'Orbitron', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-arcade:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.14);
+}
+
+.btn-arcade:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.btn-arcade:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.glow-cyan {
+    box-shadow: 0 0 18px rgba(0, 243, 255, 0.35);
+}
+
+.glow-pink {
+    box-shadow: 0 0 18px rgba(255, 0, 127, 0.35);
+}
+
+.glow-amber {
+    box-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
+}
+
+.map-card {
+    transition: all 0.16s ease;
+    border: 2px solid rgba(51, 65, 85, 0.7);
+    background: rgba(15, 23, 42, 0.85);
+}
+
+.map-card:hover:not(.disabled-card) {
+    border-color: rgba(56, 189, 248, 0.65);
+    transform: translateY(-2px);
+}
+
+.map-card.selected {
+    border-color: #00f3ff;
+    background: rgba(8, 47, 73, 0.55);
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.28);
+}
+
+.map-card.disabled-card {
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+#gameCanvas {
+    display: block;
+    border-radius: 14px;
+    box-shadow: 0 0 45px rgba(0, 0, 0, 0.9), 0 0 22px rgba(56, 189, 248, 0.22);
+    border: 2px solid rgba(56, 189, 248, 0.28);
+    touch-action: none;
+}
+
+.sudden-death-pulse {
+    animation: sdPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes sdPulse {
+    from {
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+        border-color: rgba(239, 68, 68, 0.6);
+    }
+
+    to {
+        box-shadow: 0 0 24px rgba(239, 68, 68, 0.85);
+        border-color: rgba(248, 113, 113, 1);
+    }
+}
+
+.rare-badge-glow {
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.45);
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.4);
+    border-radius: 3px;
+}
+
