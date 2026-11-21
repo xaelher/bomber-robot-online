@@ -1307,7 +1307,8 @@
             clientInputSeq: 0,
             lastHostStateReceived: 0,
             lastProcessedRoundSeed: null,
-            remoteInputs: {}
+            remoteInputs: {},
+            claimedPowerups: {}
         };
 
         const __firebase_config = JSON.stringify({
@@ -1662,6 +1663,7 @@
             game.bombs = [];
             game.explosions = [];
             game.powerups = [];
+            netState.claimedPowerups = {};
             game.projectiles = [];
             game.knifeSlashes = [];
             game.scorchMarks = [];
@@ -2283,6 +2285,16 @@
             };
         }
 
+        function pushHostGameStateNow(forceGrid = false) {
+            if (game.mode === 'online' && netState.isHost && firebaseReady && currentUser && netState.roomCode) {
+                netState.lastStatePushTime = performance.now();
+                const stateRef = ref(db, `${ROOMS_PATH}/${netState.roomCode}/gameState`);
+                set(stateRef, serializeOnlineGameState(netState.lastProcessedRoundSeed, forceGrid)).catch(err => {
+                    console.error('Host state push error:', err);
+                });
+            }
+        }
+
         function handleOnlineGameSync(data) {
             const gs = data && data.gameState ? data.gameState : data;
             if (!gs) return;
@@ -2379,22 +2391,44 @@
                 }
                 localR.alive = sr.alive;
                 localR.wins = sr.wins;
-                localR.score = sr.score || 0;
-                localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
                 if (sr.slot === netState.mySlot) {
+                    const isRecentlyClaimed = (performance.now() - (localR._lastPowerupClaimTime || 0)) < 400;
+                    if (isRecentlyClaimed) {
+                        localR.maxBombs = Math.min(MAX_BOMBS, Math.max(localR.maxBombs, sr.maxBombs));
+                        localR.blastRadius = Math.max(localR.blastRadius, sr.blastRadius);
+                        localR.speed = Math.max(localR.speed, sr.speed);
+                        localR.hasShield = localR.hasShield || sr.hasShield;
+                        localR.score = Math.max(localR.score, sr.score || 0);
+                        if (!sr.rareItem && localR.rareItem) {
+                            // keep locally picked up rare item until host acknowledges
+                        } else {
+                            localR.rareItem = sr.rareItem || null;
+                            localR.rareAmmo = sr.rareAmmo || 0;
+                        }
+                    } else {
+                        localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
+                        localR.blastRadius = sr.blastRadius;
+                        localR.speed = sr.speed;
+                        localR.hasShield = sr.hasShield;
+                        localR.score = sr.score || 0;
+                        localR.rareItem = sr.rareItem || null;
+                        localR.rareAmmo = sr.rareAmmo || 0;
+                    }
                     const pendingOptimistic = game.bombs.filter(b => b.optimistic && b.ownerSlot === netState.mySlot).length;
                     localR.activeBombs = Math.max(sr.activeBombs || 0, pendingOptimistic);
                 } else {
+                    localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
+                    localR.blastRadius = sr.blastRadius;
+                    localR.speed = sr.speed;
+                    localR.hasShield = sr.hasShield;
+                    localR.score = sr.score || 0;
+                    localR.rareItem = sr.rareItem || null;
+                    localR.rareAmmo = sr.rareAmmo || 0;
                     localR.activeBombs = sr.activeBombs || 0;
                 }
                 localR.activeDetonatorBombs = sr.activeDetonatorBombs || 0;
-                localR.blastRadius = sr.blastRadius;
-                localR.speed = sr.speed;
                 localR.invulnTimer = sr.invulnTimer !== undefined ? sr.invulnTimer : 0;
-                localR.hasShield = sr.hasShield;
                 localR.virusEffect = sr.virusEffect;
-                localR.rareItem = sr.rareItem || null;
-                localR.rareAmmo = sr.rareAmmo || 0;
                 localR.equippedSlot = sr.equippedSlot || 'bomb';
             });
 
@@ -2431,7 +2465,18 @@
             if ((gs.knifeSlashes || []).length > game.knifeSlashes.length) sfx.knifeSlash();
 
             game.explosions = (gs.explosions || []).map(e => ({ ...e, maxTimer: 0.48 }));
-            game.powerups = (gs.powerups || []).map(p => ({ ...p, bobTimer: performance.now() / 280 }));
+
+            // Powerups reconciliation: filter out powerups client recently picked up optimistically (< 450ms)
+            const nowSync = performance.now();
+            const filteredPowerups = (gs.powerups || []).filter(p => {
+                const claimKey = `${p.c},${p.r}`;
+                const claimTime = netState.claimedPowerups ? netState.claimedPowerups[claimKey] : null;
+                if (claimTime && (nowSync - claimTime < 450)) {
+                    return false;
+                }
+                return true;
+            });
+            game.powerups = filteredPowerups.map(p => ({ ...p, bobTimer: performance.now() / 280 }));
             game.projectiles = (gs.projectiles || []).map(pr => ({ ...pr }));
             game.knifeSlashes = (gs.knifeSlashes || []).map(ks => ({ ...ks, maxTimer: 0.24 }));
 
@@ -2491,6 +2536,7 @@
             netState.isOnline = false;
             netState.roomCode = null;
             netState.isHost = false;
+            netState.claimedPowerups = {};
             game.active = false;
             showView('viewMenu');
         }
@@ -2660,12 +2706,18 @@
                 }
             }
 
+        }
+
+        function checkRobotTileInteractions(robot, isLocalClient = false) {
+            if (!robot.alive) return false;
+            let interacted = false;
+
             // Check Warp Pads (Mecha Vault)
             const curTileC = Math.floor(robot.x);
             const curTileR = Math.floor(robot.y);
-            if (robot.warpCooldown <= 0 && game.warpPads.length >= 2) {
+            if (robot.warpCooldown <= 0 && game.warpPads && game.warpPads.length >= 2) {
                 const pad = game.warpPads.find(wp => wp.c === curTileC && wp.r === curTileR);
-                if (pad && Math.hypot(robot.x - (pad.c + 0.5), robot.y - (pad.r + 0.5)) < 0.34) {
+                if (pad && Math.hypot(robot.x - (pad.c + 0.5), robot.y - (pad.r + 0.5)) < 0.38) {
                     const target = game.warpPads.find(wp => wp.id === pad.targetId);
                     if (target && !isSolidTile(game.grid[target.r][target.c])) {
                         spawnWarpBurst(robot.x, robot.y, pad.color);
@@ -2677,20 +2729,28 @@
                         spawnWarpBurst(robot.x, robot.y, target.color);
                         addFloatingText(robot.x, robot.y - 0.45, 'WARP!', target.color);
                         sfx.warp();
+                        interacted = true;
                     }
                 }
             }
 
-            // Check Powerup Pickup
-            const finalC = Math.floor(robot.x);
-            const finalR = Math.floor(robot.y);
+            // Check Powerup Pickup (with contact radius < 0.52 and tile check)
             for (let i = game.powerups.length - 1; i >= 0; i--) {
                 const p = game.powerups[i];
-                if (p.c === finalC && p.r === finalR) {
+                const dist = Math.hypot(robot.x - (p.c + 0.5), robot.y - (p.r + 0.5));
+                if (dist < 0.52 || (p.c === curTileC && p.r === curTileR)) {
                     applyPowerup(robot, p.type);
                     game.powerups.splice(i, 1);
+                    interacted = true;
+                    if (isLocalClient) {
+                        robot._lastPowerupClaimTime = performance.now();
+                        if (!netState.claimedPowerups) netState.claimedPowerups = {};
+                        netState.claimedPowerups[`${p.c},${p.r}`] = performance.now();
+                    }
                 }
             }
+
+            return interacted;
         }
 
         function applyPowerup(robot, type) {
@@ -3911,6 +3971,7 @@
                 if (myRobot && myRobot.alive) {
                     updateRobotTimers(myRobot, dt);
                     moveRobot(myRobot, inputs.p1x, inputs.p1y, dt);
+                    checkRobotTileInteractions(myRobot, true);
 
                     // Optimistic execution on client for instant 0ms response!
                     if (inputs.p1Swap) {
@@ -4145,6 +4206,12 @@
                 } else if (robot.controlType === 'ai') {
                     updateSmartAiBot(robot, dt);
                 }
+
+                // Check tile interactions (powerup pickup & warp pads) for ALL alive robots (Local & Online)
+                const tileInteracted = checkRobotTileInteractions(robot, false);
+                if (tileInteracted && game.mode === 'online' && netState.isHost) {
+                    pushHostGameStateNow();
+                }
             }
 
             // Update Sniper Projectiles & Knife Slashes
@@ -4190,11 +4257,7 @@
             if (game.mode === 'online' && netState.isHost && firebaseReady && currentUser && netState.roomCode) {
                 const now = performance.now();
                 if (now - netState.lastStatePushTime >= 35) {
-                    netState.lastStatePushTime = now;
-                    const stateRef = ref(db, `${ROOMS_PATH}/${netState.roomCode}/gameState`);
-                    set(stateRef, serializeOnlineGameState()).catch(err => {
-                        console.error('Host state push error:', err);
-                    });
+                    pushHostGameStateNow();
                 }
             }
 
