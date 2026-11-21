@@ -37,7 +37,7 @@ jobs:
             echo "Found $HTML_FILE, publishing as index.html"
             cp "$HTML_FILE" _site/index.html
           else
-            echo "Error: No .html game file found in repository! Files currently in repo:"
+            echo "Error: No .html game file found in repository!"
             ls -la
             exit 1
           fi
@@ -46,7 +46,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: "_site"
 
