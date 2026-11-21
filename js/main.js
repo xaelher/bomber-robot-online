@@ -95,8 +95,8 @@ export function updateGameHud() {
                         <div class="flex items-center gap-1">${pipsHtml}</div>
                     </div>
                     <div class="flex items-center gap-2 text-slate-400 text-[10px]">
-                        <span title="Blast Radius">🔥 ${r.blastRadius}</span>
-                        <span title="Movement Speed">⚡ ${r.speed.toFixed(1)}</span>
+                        <span title="Blast Radius">🔥 ${r.blastRadius || 2}</span>
+                        <span title="Movement Speed">⚡ ${(r.speed !== undefined && r.speed !== null ? r.speed : 3.75).toFixed(1)}</span>
                     </div>
                 </div>
 

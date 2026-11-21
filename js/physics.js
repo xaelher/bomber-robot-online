@@ -62,6 +62,7 @@ export function createRobot(slotIndex, config) {
         virusTimer: 0,
         invulnTimer: 1.4,
         warpCooldown: 0,
+        warpCount: config.warpCount || 0,
         walkAnim: 0,
         moving: false,
         netTargetX: spawn.c + 0.5,
@@ -70,6 +71,7 @@ export function createRobot(slotIndex, config) {
         netMoving: false,
         netDx: 0,
         netDy: 0,
+        netSpeed: 3.75,
         netLastPacketTime: 0,
         // Rare Drop Weapon System
         rareItem: null,        // null | 'SNIPER' | 'KNIFE' | 'DETONATOR'
@@ -178,6 +180,8 @@ export function setupRound(robotConfigs, seed) {
     netState.lastClientInputPush = 0;
     netState.clientActionId = 0;
     netState.pendingAction = null;
+    netState.isPushingInput = false;
+    netState.isPushingState = false;
 
     game.robots = robotConfigs.map((cfg, idx) => createRobot(cfg.slot !== undefined ? cfg.slot : idx, cfg));
     game.robots.forEach(r => {
@@ -188,6 +192,7 @@ export function setupRound(robotConfigs, seed) {
         r._lastRemoteActionId = 0;
         r._warpSeq = 0;
         r._lastRemoteWarpSeq = 0;
+        r.warpCount = 0;
     });
 
     document.getElementById('arenaOverlay').classList.add('hidden');
@@ -377,6 +382,7 @@ export function checkRobotTileInteractions(robot, isLocalClient = false) {
                 robot.warpCooldown = 2.2;
                 robot.aiPath = [];
                 robot._warpSeq = (robot._warpSeq || 0) + 1;
+                robot.warpCount = (robot.warpCount || 0) + 1;
                 spawnWarpBurst(robot.x, robot.y, target.color);
                 addFloatingText(robot.x, robot.y - 0.45, 'WARP!', target.color);
                 sfx.warp();
@@ -1175,7 +1181,12 @@ export function updateSimulation(dt) {
         const isMoving = cur.dx !== 0 || cur.dy !== 0 || (myRobot && myRobot.moving);
         const timeSincePush = now - (netState.lastClientInputPush || 0);
         // Push immediately on action, or throttled to 33 ms while moving or on input change (~30 Hz), or heartbeat every 250 ms
-        const shouldPush = hasAction || ((stateChanged || isMoving) && timeSincePush >= 33) || (timeSincePush >= 250);
+        let shouldPush = hasAction || ((stateChanged || isMoving) && timeSincePush >= 33) || (timeSincePush >= 250);
+
+        // In-flight guard: if previous set() is still in progress and no immediate action, skip to prevent congestion
+        if (netState.isPushingInput && !hasAction) {
+            shouldPush = false;
+        }
 
         if (isFirebaseReady() && getCurrentUser() && netState.roomCode && shouldPush && myRobot) {
             netState.lastClientInputPush = now;
@@ -1201,24 +1212,58 @@ export function updateSimulation(dt) {
                 detonate: cur.detonate,
                 actionId: act ? act.actionId : (netState.clientActionId || 0),
                 actionType: act ? act.actionType : null,
-                actionC: act ? act.actionC : Math.floor(myRobot.x),
-                actionR: act ? act.actionR : Math.floor(myRobot.y),
-                actionDir: act ? act.actionDir : myRobot.dir,
+                actionC: Math.floor(myRobot.x),
+                actionR: Math.floor(myRobot.y),
+                actionDir: myRobot.dir,
                 seq: nextSeq,
                 ts: Date.now()
             });
         }
 
-        // Smooth 60 FPS interpolation for remote opponents and host on client screen
+        // Smooth 60 FPS interpolation + extrapolation for remote opponents and host on client screen
         for (const robot of game.robots) {
             if (!robot.alive || robot.slot === netState.mySlot) continue;
             if (robot.netTargetX !== undefined && robot.netTargetY !== undefined) {
-                const alpha = 1 - Math.exp(-16 * dt);
-                robot.x += (robot.netTargetX - robot.x) * alpha;
-                robot.y += (robot.netTargetY - robot.y) * alpha;
+                let targetX = robot.netTargetX;
+                let targetY = robot.netTargetY;
+
+                const timeSincePacket = performance.now() - (robot.netLastPacketTime || 0);
+                if (timeSincePacket < 110 && robot.netMoving && robot.netDir) {
+                    const dirVec = {
+                        up: { dx: 0, dy: -1 },
+                        down: { dx: 0, dy: 1 },
+                        left: { dx: -1, dy: 0 },
+                        right: { dx: 1, dy: 0 }
+                    }[robot.netDir] || { dx: 0, dy: 0 };
+
+                    const moveSpeed = robot.netSpeed || robot.speed || 3.75;
+                    const leadDist = Math.min(0.30, moveSpeed * (timeSincePacket / 1000) * 0.85);
+                    const testX = targetX + dirVec.dx * leadDist;
+                    const testY = targetY + dirVec.dy * leadDist;
+                    const leadC = Math.floor(testX);
+                    const leadR = Math.floor(testY);
+
+                    if (leadC >= 0 && leadC < game.cols && leadR >= 0 && leadR < game.rows) {
+                        const leadTile = game.grid[leadR][leadC];
+                        if (!isSolidTile(leadTile) && leadTile !== TILE_LAVA && leadTile !== TILE_CRUSHER) {
+                            const bombOnLead = game.bombs.some(b => b.c === leadC && b.r === leadR && !(b.passSlots && b.passSlots.has(robot.slot)));
+                            if (!bombOnLead) {
+                                targetX = testX;
+                                targetY = testY;
+                            }
+                        }
+                    }
+                }
+
+                const alpha = 1 - Math.exp(-22 * dt);
+                robot.x += (targetX - robot.x) * alpha;
+                robot.y += (targetY - robot.y) * alpha;
+
                 if (robot.netDir) robot.dir = robot.netDir;
-                robot.moving = robot.netMoving !== undefined ? robot.netMoving : (Math.hypot(robot.netTargetX - robot.x, robot.netTargetY - robot.y) > 0.04);
-                if (robot.moving) robot.walkAnim += robot.speed * dt * 5.2;
+                robot.moving = !!robot.netMoving || (Math.hypot(targetX - robot.x, targetY - robot.y) > 0.02);
+                if (robot.moving) {
+                    robot.walkAnim += (robot.netSpeed || robot.speed) * dt * 5.2;
+                }
             }
         }
 

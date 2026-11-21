@@ -581,6 +581,7 @@ export function serializeOnlineGameState(seed = netState.lastProcessedRoundSeed,
     const sendGrid = forceGrid || game.gridDirty;
     if (game.gridDirty) game.gridDirty = false;
     return {
+        tick: ++netState.hostTick,
         seed,
         roundNumber: game.roundNumber,
         roundTimer: Number(game.roundTimer.toFixed(1)),
@@ -603,6 +604,7 @@ export function serializeOnlineGameState(seed = netState.lastProcessedRoundSeed,
             y: Number((r.alive && r.controlType === 'online_remote' && r.netTargetY !== undefined ? r.netTargetY : r.y).toFixed(3)),
             dir: r.dir, moving: r.moving, alive: r.alive,
             wins: r.wins, score: r.score,
+            warpCount: r.warpCount || 0,
             maxBombs: r.maxBombs, activeBombs: r.activeBombs,
             activeDetonatorBombs: r.activeDetonatorBombs,
             blastRadius: r.blastRadius, speed: Number(r.speed.toFixed(2)),
@@ -639,11 +641,19 @@ export function serializeOnlineGameState(seed = netState.lastProcessedRoundSeed,
 
 export function pushHostGameStateNow(forceGrid = false) {
     if (game.mode === 'online' && netState.isHost && firebaseReady && currentUser && netState.roomCode) {
+        if (netState.isPushingState && !forceGrid) {
+            return;
+        }
+        netState.isPushingState = true;
         netState.lastStatePushTime = performance.now();
         const stateRef = ref(db, `${ROOMS_PATH}/${netState.roomCode}/gameState`);
-        set(stateRef, serializeOnlineGameState(netState.lastProcessedRoundSeed, forceGrid)).catch(err => {
-            console.error('Host state push error:', err);
-        });
+        set(stateRef, serializeOnlineGameState(netState.lastProcessedRoundSeed, forceGrid))
+            .catch(err => {
+                console.error('Host state push error:', err);
+            })
+            .finally(() => {
+                netState.isPushingState = false;
+            });
     }
 }
 
@@ -658,6 +668,19 @@ export function handleOnlineGameSync(data) {
     }
 
     if (netState.isHost) return;
+
+    // Check round change vs stale packets (Tick / Jitter protection)
+    const isNewRound = gs.seed !== netState.lastAppliedSeed;
+    if (isNewRound) {
+        netState.lastAppliedSeed = gs.seed;
+        netState.lastClientTick = 0;
+    } else if (gs.tick !== undefined && gs.tick <= netState.lastClientTick) {
+        // Discard older/out-of-order packet to prevent backward teleportation!
+        return;
+    }
+    if (gs.tick !== undefined) {
+        netState.lastClientTick = gs.tick;
+    }
 
     // Client applies authoritative Host state
     netState.lastHostStateReceived = Date.now();
@@ -683,9 +706,9 @@ export function handleOnlineGameSync(data) {
     game.crusherWarnings = (gs.crusherWarnings || []).map(w => ({ ...w, maxTimer: 0.85 }));
     game.active = true;
 
-    // Only update grid when gridFlat is sent (new gridVersion or round start)
+    // Only update grid when gridFlat is sent (new gridVersion or new round)
     if (gs.gridFlat && gs.gridFlat.length === game.rows * game.cols) {
-        if (game.clientGridVersion !== gs.gridVersion || !game.grid || dimChanged) {
+        if (isNewRound || game.clientGridVersion !== gs.gridVersion || !game.grid || dimChanged) {
             game.clientGridVersion = gs.gridVersion;
             const newGrid = [];
             for (let r = 0; r < game.rows; r++) {
@@ -702,38 +725,45 @@ export function handleOnlineGameSync(data) {
             localR = createRobot(sr.slot, {
                 name: sr.name, uid: sr.uid,
                 controlType: sr.slot === netState.mySlot ? 'online_local' : 'online_remote',
-                wins: sr.wins, score: sr.score
+                wins: sr.wins, score: sr.score, warpCount: sr.warpCount || 0
             });
             game.robots.push(localR);
         }
 
         if (sr.slot === netState.mySlot) {
-            // Client is authoritative for its own predicted robot!
-            // Only snap if massive discrepancy (> 3.2 tiles) e.g. Warp Pad or round reset
-            const diff = Math.hypot(sr.x - localR.x, sr.y - localR.y);
-            if (diff > 3.2) {
-                if (localR.alive && sr.alive) {
-                    sfx.warp();
-                    spawnWarpBurst(sr.x, sr.y, '#00f3ff');
-                }
+            // Client is 100% authoritative for its own predicted robot coordinates!
+            // Only update coordinates on round start or when Warp Pad teleports on host
+            if (isNewRound) {
                 localR.x = sr.x;
                 localR.y = sr.y;
+                localR.warpCount = sr.warpCount || 0;
+            } else if ((sr.warpCount || 0) > (localR.warpCount || 0)) {
+                localR.warpCount = sr.warpCount;
+                localR.x = sr.x;
+                localR.y = sr.y;
+                sfx.warp();
+                spawnWarpBurst(sr.x, sr.y, '#00f3ff');
             }
-            // NEVER pull back or lerp backwards during normal gameplay to eliminate rubber-banding!
+            // NEVER snap or lerp backwards during normal gameplay to eliminate rubber-banding!
         } else {
-            // Remote robots: store target and direction for smooth 60 FPS interpolation in updateSimulation
-            localR.netTargetX = sr.x;
-            localR.netTargetY = sr.y;
-            localR.netDir = sr.dir;
-            localR.netMoving = sr.moving;
-            const jumpDist = Math.hypot(sr.x - localR.x, sr.y - localR.y);
-            if (jumpDist > 3.0) {
-                if (localR.alive && sr.alive) {
+            // Remote robots: store target and direction for smooth 60 FPS interpolation + extrapolation in updateSimulation
+            if (isNewRound || (sr.warpCount || 0) > (localR.warpCount || 0)) {
+                localR.x = sr.x;
+                localR.y = sr.y;
+                localR.warpCount = sr.warpCount || 0;
+                localR.netTargetX = sr.x;
+                localR.netTargetY = sr.y;
+                if ((sr.warpCount || 0) > (localR.warpCount || 0)) {
                     sfx.warp();
                     spawnWarpBurst(sr.x, sr.y, '#00f3ff');
                 }
-                localR.x = sr.x;
-                localR.y = sr.y;
+            } else {
+                localR.netTargetX = sr.x;
+                localR.netTargetY = sr.y;
+                localR.netDir = sr.dir;
+                localR.netMoving = !!sr.moving;
+                localR.netSpeed = sr.speed || 3.75;
+                localR.netLastPacketTime = performance.now();
             }
         }
 
@@ -747,9 +777,9 @@ export function handleOnlineGameSync(data) {
         if (sr.slot === netState.mySlot) {
             const isRecentlyClaimed = (performance.now() - (localR._lastPowerupClaimTime || 0)) < 400;
             if (isRecentlyClaimed) {
-                localR.maxBombs = Math.min(MAX_BOMBS, Math.max(localR.maxBombs, sr.maxBombs));
-                localR.blastRadius = Math.max(localR.blastRadius, sr.blastRadius);
-                localR.speed = Math.max(localR.speed, sr.speed);
+                if (sr.maxBombs !== undefined) localR.maxBombs = Math.min(MAX_BOMBS, Math.max(localR.maxBombs, sr.maxBombs));
+                if (sr.blastRadius !== undefined) localR.blastRadius = Math.max(localR.blastRadius, sr.blastRadius);
+                if (sr.speed !== undefined) localR.speed = Math.max(localR.speed, sr.speed);
                 localR.hasShield = localR.hasShield || sr.hasShield;
                 localR.score = Math.max(localR.score, sr.score || 0);
                 if (!sr.rareItem && localR.rareItem) {
@@ -759,9 +789,9 @@ export function handleOnlineGameSync(data) {
                     localR.rareAmmo = sr.rareAmmo || 0;
                 }
             } else {
-                localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
-                localR.blastRadius = sr.blastRadius;
-                localR.speed = sr.speed;
+                if (sr.maxBombs !== undefined) localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
+                if (sr.blastRadius !== undefined) localR.blastRadius = sr.blastRadius;
+                if (sr.speed !== undefined) localR.speed = sr.speed;
                 localR.hasShield = sr.hasShield;
                 localR.score = sr.score || 0;
                 localR.rareItem = sr.rareItem || null;
@@ -770,9 +800,9 @@ export function handleOnlineGameSync(data) {
             const pendingOptimistic = game.bombs.filter(b => b.optimistic && b.ownerSlot === netState.mySlot).length;
             localR.activeBombs = Math.max(sr.activeBombs || 0, pendingOptimistic);
         } else {
-            localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
-            localR.blastRadius = sr.blastRadius;
-            localR.speed = sr.speed;
+            if (sr.maxBombs !== undefined) localR.maxBombs = Math.min(MAX_BOMBS, sr.maxBombs);
+            if (sr.blastRadius !== undefined) localR.blastRadius = sr.blastRadius;
+            if (sr.speed !== undefined) localR.speed = sr.speed;
             localR.hasShield = sr.hasShield;
             localR.score = sr.score || 0;
             localR.rareItem = sr.rareItem || null;
@@ -897,16 +927,26 @@ export async function leaveOnlineRoom(notifyServer = true) {
     netState.roomCode = null;
     netState.isHost = false;
     netState.claimedPowerups = {};
+    netState.isPushingState = false;
+    netState.isPushingInput = false;
+    netState.hostTick = 0;
+    netState.lastClientTick = 0;
+    netState.lastAppliedSeed = null;
     game.active = false;
     showView('viewMenu');
 }
 
 export function sendClientInput(payload) {
     if (!firebaseReady || !currentUser || !netState.roomCode) return;
+    netState.isPushingInput = true;
     const inputRef = ref(db, `${ROOMS_PATH}/${netState.roomCode}/inputs/${netState.mySlot}`);
-    set(inputRef, payload).catch((err) => {
-        console.error('Client input send error:', err);
-    });
+    set(inputRef, payload)
+        .catch((err) => {
+            console.error('Client input send error:', err);
+        })
+        .finally(() => {
+            netState.isPushingInput = false;
+        });
 }
 
 export function removePlayerSlot(slot) {

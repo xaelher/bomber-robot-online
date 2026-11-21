@@ -34,7 +34,13 @@ export const netState = {
     lastHostStateReceived: 0,
     lastProcessedRoundSeed: null,
     remoteInputs: {},
-    claimedPowerups: {}
+    claimedPowerups: {},
+    // Jitter & In-Flight congestion protection
+    hostTick: 0,
+    lastClientTick: 0,
+    lastAppliedSeed: null,
+    isPushingState: false,
+    isPushingInput: false
 };
 
 export const game = {
