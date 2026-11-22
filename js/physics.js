@@ -75,7 +75,8 @@ export function createRobot(slotIndex, config) {
         netLastPacketTime: 0,
         // Rare Drop Weapon System
         rareItem: null,        // null | 'SNIPER' | 'KNIFE' | 'DETONATOR'
-        rareAmmo: 0,           // 3 for Sniper, -1 (unlimited) for Knife/Detonator
+        rareAmmo: 0,           // 3 for Sniper, 2 for Detonator
+        knifeCooldown: 0,      // 10s cooldown for Plasma Knife
         equippedSlot: 'bomb',  // 'bomb' | 'rare'
         actionCooldown: 0,
         // Tactical AI memory
@@ -230,6 +231,7 @@ export function updateRobotTimers(robot, dt) {
     if (robot.warpCooldown > 0) robot.warpCooldown = Math.max(0, robot.warpCooldown - dt);
     if (robot.invulnTimer > 0) robot.invulnTimer = Math.max(0, robot.invulnTimer - dt);
     if (robot.actionCooldown > 0) robot.actionCooldown = Math.max(0, robot.actionCooldown - dt);
+    if (robot.knifeCooldown > 0) robot.knifeCooldown = Math.max(0, robot.knifeCooldown - dt);
     if (robot.virusTimer > 0) {
         robot.virusTimer = Math.max(0, robot.virusTimer - dt);
         if (robot.virusEffect === 'diarrhea') {
@@ -457,19 +459,20 @@ export function applyPowerup(robot, type) {
     } else if (type === 'KNIFE') {
         robot.rareItem = 'KNIFE';
         robot.rareAmmo = -1;
+        robot.knifeCooldown = 0;
         robot.equippedSlot = 'rare';
         robot.score += 150;
         sfx.rarePickup();
         addFloatingText(robot.x, robot.y - 0.5, '🔪 PLASMA KNIFE!', '#fb7185');
-        showToast(`🔪 ${robot.name} acquired the PLASMA KNIFE (same-tile strike)!`);
+        showToast(`🔪 ${robot.name} acquired the PLASMA KNIFE (same-tile strike, 10s CD)!`);
     } else if (type === 'DETONATOR') {
         robot.rareItem = 'DETONATOR';
-        robot.rareAmmo = -1;
+        robot.rareAmmo = 2;
         robot.equippedSlot = 'rare';
         robot.score += 150;
         sfx.rarePickup();
-        addFloatingText(robot.x, robot.y - 0.5, '🧨 DETONATOR C4 (MAX 2)!', '#e879f9');
-        showToast(`🧨 ${robot.name} acquired DETONATOR C4 (2 max-radius remote bombs)!`);
+        addFloatingText(robot.x, robot.y - 0.5, '🧨 DETONATOR C4 (2 CHARGES)!', '#e879f9');
+        showToast(`🧨 ${robot.name} acquired DETONATOR C4 (2 max-radius remote charges)!`);
     }
     updateGameHud();
 }
@@ -564,8 +567,10 @@ export function fireSniper(robot) {
 export function slashKnife(robot) {
     if (!robot.alive || robot.rareItem !== 'KNIFE') return false;
     if (robot.actionCooldown > 0) return false;
+    if (robot.knifeCooldown > 0) return false;
 
     robot.actionCooldown = 0.35;
+    robot.knifeCooldown = 10.0;
     sfx.knifeSlash();
     game.knifeSlashes.push({
         x: robot.x,
@@ -597,10 +602,12 @@ export function slashKnife(robot) {
 
 export function placeDetonatorBomb(robot, customC, customR, isOptimistic = false) {
     if (!robot.alive || robot.rareItem !== 'DETONATOR') return false;
-    // Strict cap of 2 Detonator Bombs! If 2 are already planted, pressing action triggers them!
+    // Strict cap of 1 Detonator Bomb! If 1 is already planted, pressing action triggers it!
     if (robot.activeDetonatorBombs >= MAX_DETONATOR_BOMBS) {
         return triggerRobotDetonator(robot);
     }
+    if (robot.rareAmmo <= 0) return false;
+
     const c = (customC !== undefined && customC >= 0 && customC < game.cols) ? customC : Math.floor(robot.x);
     const r = (customR !== undefined && customR >= 0 && customR < game.rows) ? customR : Math.floor(robot.y);
     if (isSolidTile(game.grid[r][c])) return false;
@@ -616,6 +623,7 @@ export function placeDetonatorBomb(robot, customC, customR, isOptimistic = false
     }
 
     robot.activeDetonatorBombs++;
+    robot.rareAmmo = Math.max(0, robot.rareAmmo - 1);
     robot.actionCooldown = 0.24;
     const newBomb = {
         id: Math.random().toString(36).slice(2),
@@ -720,6 +728,11 @@ export function detonateBomb(bomb) {
     if (owner) {
         if (bomb.isDetonator) {
             owner.activeDetonatorBombs = Math.max(0, owner.activeDetonatorBombs - 1);
+            if (owner.rareItem === 'DETONATOR' && owner.rareAmmo <= 0 && owner.activeDetonatorBombs === 0) {
+                owner.rareItem = null;
+                owner.equippedSlot = 'bomb';
+                addFloatingText(owner.x, owner.y - 0.5, 'DETONATOR EMPTY!', '#94a3b8');
+            }
         } else {
             owner.activeBombs = Math.max(0, owner.activeBombs - 1);
         }
@@ -1037,8 +1050,16 @@ export function updateSuddenDeath(dt) {
                 game.bombs.splice(bIdx, 1);
                 const owner = game.robots.find(r => r.slot === b.ownerSlot);
                 if (owner) {
-                    if (b.isDetonator) owner.activeDetonatorBombs = Math.max(0, owner.activeDetonatorBombs - 1);
-                    else owner.activeBombs = Math.max(0, owner.activeBombs - 1);
+                    if (b.isDetonator) {
+                        owner.activeDetonatorBombs = Math.max(0, owner.activeDetonatorBombs - 1);
+                        if (owner.rareItem === 'DETONATOR' && owner.rareAmmo <= 0 && owner.activeDetonatorBombs === 0) {
+                            owner.rareItem = null;
+                            owner.equippedSlot = 'bomb';
+                            addFloatingText(owner.x, owner.y - 0.5, 'DETONATOR EMPTY!', '#94a3b8');
+                        }
+                    } else {
+                        owner.activeBombs = Math.max(0, owner.activeBombs - 1);
+                    }
                 }
             }
 

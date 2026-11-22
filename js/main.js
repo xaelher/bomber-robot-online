@@ -66,10 +66,19 @@ export function updateGameHud() {
             }
         }
 
+        let rareStatus = 'READY';
+        if (r.rareItem === 'SNIPER') {
+            rareStatus = `${r.rareAmmo} SHOTS`;
+        } else if (r.rareItem === 'KNIFE') {
+            rareStatus = (r.knifeCooldown && r.knifeCooldown > 0) ? `CD ${r.knifeCooldown.toFixed(1)}s` : 'READY';
+        } else if (r.rareItem === 'DETONATOR') {
+            rareStatus = r.activeDetonatorBombs > 0 ? `ARMED [DET] (${r.rareAmmo} left)` : `${r.rareAmmo}/2 C4`;
+        }
+
         const rareBadge = r.rareItem ? `
             <div class="mt-1 flex items-center justify-between text-[11px] px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-bold">
                 <span>${POWERUP_TYPES[r.rareItem]?.icon || '✨'} ${r.rareItem}</span>
-                <span>${r.rareAmmo > 0 ? `${r.rareAmmo} SHOTS` : (r.rareItem === 'DETONATOR' ? `${r.activeDetonatorBombs}/2 C4` : 'READY')}</span>
+                <span>${rareStatus}</span>
             </div>
         ` : '';
 
@@ -118,7 +127,15 @@ export function updateGameHud() {
         if (localRobot.equippedSlot === 'rare' && localRobot.rareItem) {
             const rm = POWERUP_TYPES[localRobot.rareItem];
             actIcon.textContent = rm.icon;
-            actLabel.textContent = localRobot.rareItem === 'SNIPER' ? `SHOT (${localRobot.rareAmmo})` : localRobot.rareItem;
+            if (localRobot.rareItem === 'SNIPER') {
+                actLabel.textContent = `SHOT (${localRobot.rareAmmo})`;
+            } else if (localRobot.rareItem === 'KNIFE') {
+                actLabel.textContent = (localRobot.knifeCooldown && localRobot.knifeCooldown > 0) ? `KNIFE (${Math.ceil(localRobot.knifeCooldown)}s)` : 'KNIFE';
+            } else if (localRobot.rareItem === 'DETONATOR') {
+                actLabel.textContent = localRobot.activeDetonatorBombs > 0 ? 'DETONATE' : `C4 (${localRobot.rareAmmo})`;
+            } else {
+                actLabel.textContent = localRobot.rareItem;
+            }
         } else {
             actIcon.textContent = '💣';
             actLabel.textContent = 'BOMB';

@@ -609,6 +609,7 @@ export function serializeOnlineGameState(seed = netState.lastProcessedRoundSeed,
             activeDetonatorBombs: r.activeDetonatorBombs,
             blastRadius: r.blastRadius, speed: Number(r.speed.toFixed(2)),
             invulnTimer: Number(r.invulnTimer.toFixed(2)),
+            knifeCooldown: Number((r.knifeCooldown || 0).toFixed(1)),
             hasShield: r.hasShield, virusEffect: r.virusEffect,
             rareItem: r.rareItem, rareAmmo: r.rareAmmo, equippedSlot: r.equippedSlot
         })),
@@ -811,6 +812,7 @@ export function handleOnlineGameSync(data) {
         }
         localR.activeDetonatorBombs = sr.activeDetonatorBombs || 0;
         localR.invulnTimer = sr.invulnTimer !== undefined ? sr.invulnTimer : 0;
+        localR.knifeCooldown = sr.knifeCooldown !== undefined ? sr.knifeCooldown : 0;
         localR.virusEffect = sr.virusEffect;
         localR.equippedSlot = sr.equippedSlot || 'bomb';
     });

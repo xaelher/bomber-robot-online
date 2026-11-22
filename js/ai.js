@@ -193,7 +193,7 @@ export function findSafeEscapePath(robot, startC, startR, dangerMap, simExtraBom
  */
 export function canSafelyPlantBomb(robot, c, r, isDetonator = false) {
     if (isDetonator) {
-        if (robot.activeDetonatorBombs >= MAX_DETONATOR_BOMBS) return false;
+        if (robot.rareAmmo <= 0 || robot.activeDetonatorBombs >= MAX_DETONATOR_BOMBS) return false;
     } else {
         const cap = Math.min(MAX_BOMBS, robot.maxBombs);
         if (robot.activeBombs >= cap) return false;
@@ -451,7 +451,7 @@ export function updateSmartAiBot(robot, dt) {
             robot.dir = losDir;
             fireSniper(robot);
         }
-    } else if (robot.rareItem === 'KNIFE' && robot.actionCooldown <= 0) {
+    } else if (robot.rareItem === 'KNIFE' && robot.actionCooldown <= 0 && (!robot.knifeCooldown || robot.knifeCooldown <= 0)) {
         const sameBlockEnemy = game.robots.some(o => o !== robot && o.alive && Math.floor(o.x) === c && Math.floor(o.y) === r);
         if (sameBlockEnemy) {
             robot.equippedSlot = 'rare';
@@ -496,7 +496,7 @@ export function updateSmartAiBot(robot, dt) {
         const shouldBombCrate = adjCrates > 0 && robot.aiGoalType !== 'powerup';
 
         if (shouldBombEnemy || shouldBombCrate) {
-            const useC4 = (robot.rareItem === 'DETONATOR' && robot.activeDetonatorBombs < MAX_DETONATOR_BOMBS && canSafelyPlantBomb(robot, c, r, true));
+            const useC4 = (robot.rareItem === 'DETONATOR' && robot.rareAmmo > 0 && robot.activeDetonatorBombs < MAX_DETONATOR_BOMBS && canSafelyPlantBomb(robot, c, r, true));
             const useReg = !useC4 && canSafelyPlantBomb(robot, c, r, false);
             let planted = false;
             if (useC4) {
