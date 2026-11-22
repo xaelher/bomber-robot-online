@@ -6,10 +6,10 @@ export const DEFAULT_COLS = 15;
 export const DEFAULT_ROWS = 13;
 export const MAX_BOMBS = 4; // Strict maximum regular bomb capacity limit
 export const MAX_DETONATOR_BOMBS = 2; // Strict limit for Remote Detonator Bombs
-export const ROUND_DURATION_STANDARD = 90;  // 1:30 standard map round before Sudden Death
-export const SUDDEN_DEATH_STANDARD = 90;    // 90s Sudden Death closes the entire standard map
-export const ROUND_DURATION_BIG = 120;      // 2:00 big map round before Sudden Death
-export const SUDDEN_DEATH_BIG = 120;        // 120s Sudden Death closes the entire big map
+export const ROUND_DURATION_STANDARD = 60;  // 60s standard map round before Sudden Death
+export const SUDDEN_DEATH_STANDARD = 60;    // 60s Sudden Death closes the entire standard map
+export const ROUND_DURATION_BIG = 75;      // 75s big map round before Sudden Death
+export const SUDDEN_DEATH_BIG = 75;        // 75s Sudden Death closes the entire big map
 
 export const TILE_EMPTY = 0;
 export const TILE_WALL = 1;
